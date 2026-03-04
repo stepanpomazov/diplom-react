@@ -109,12 +109,17 @@ export async function GET(
                 console.log(`[CHAT API] Found ${notes.length} notes`)
 
                 // Форматируем примечания
-                const formattedNotes = notes.map((note: CrmNote) => ({
-                    id: note.id.toString(),
-                    text: note.text,
-                    created_at: note.created_at,
-                    author_name: note.created_by || 'Система'
-                }))
+                const formattedNotes = notes.map((note: any) => {
+                    // Текст может быть в разных полях
+                    const noteText = note.params?.text || note.text || '';
+
+                    return {
+                        id: note.id.toString(),
+                        text: noteText,
+                        created_at: note.created_at,
+                        author_name: note.created_by === user.id ? 'Вы' : 'Система'
+                    };
+                });
 
                 return NextResponse.json({ notes: formattedNotes })
 
