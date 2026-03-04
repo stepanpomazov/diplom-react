@@ -14,8 +14,10 @@ export class AmoCrmChatService {
         }
     }
 
+    // Используем amojo.amocrm.ru для всех запросов к чатам!
     private async ajaxRequest(endpoint: string, options: RequestInit = {}) {
-        const url = `https://${this.subdomain}.amocrm.ru/ajax${endpoint}`
+        // ВАЖНО: Используем amojo.amocrm.ru, а не поддомен!
+        const url = `https://amojo.amocrm.ru${endpoint}`
         console.log('[ChatService] Requesting:', url)
 
         const response = await fetch(url, {
@@ -42,7 +44,7 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Getting chat for deal:', dealId)
             const data = await this.ajaxRequest(
-                `/chat/list?entity_type=leads&entity_id=${dealId}&scope_id=${this.scopeId}`
+                `/v2/origin/custom/${this.scopeId.split('_')[0]}/chats?entity_type=leads&entity_id=${dealId}`
             )
             console.log('[ChatService] Chat list response:', data)
             return data?.response?.items || []
@@ -57,14 +59,14 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Creating chat for deal:', dealId, 'contact:', contactId)
 
-            const data = await this.ajaxRequest('/chat/create', {
+            const data = await this.ajaxRequest(`/v2/origin/custom/${this.scopeId.split('_')[0]}/chats`, {
                 method: 'POST',
                 body: JSON.stringify({
                     entity_type: 'leads',
                     entity_id: dealId,
                     contact_id: contactId,
                     source: 'chat',
-                    scope_id: this.scopeId // ВАЖНО: добавляем scope_id!
+                    scope_id: this.scopeId
                 })
             })
 
@@ -81,7 +83,7 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Getting messages for chat:', chatId)
             const data = await this.ajaxRequest(
-                `/chat/messages?chat_id=${chatId}&scope_id=${this.scopeId}&limit=50`
+                `/v2/origin/custom/${this.scopeId.split('_')[0]}/chats/${chatId}/messages?limit=50`
             )
             return data?.response?.messages || []
         } catch (error) {
@@ -94,13 +96,14 @@ export class AmoCrmChatService {
     async sendMessageAsUser(chatId: string, text: string, userId: number) {
         try {
             console.log('[ChatService] Sending message to chat:', chatId)
-            const data = await this.ajaxRequest('/chat/send', {
+            const data = await this.ajaxRequest(`/v2/origin/custom/${this.scopeId.split('_')[0]}/chats/${chatId}/messages`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    chat_id: chatId,
-                    message: text,
-                    author_id: userId,
-                    scope_id: this.scopeId // ВАЖНО: добавляем scope_id!
+                    message: {
+                        text: text,
+                        author_id: userId
+                    },
+                    scope_id: this.scopeId
                 })
             })
             return data?.response
