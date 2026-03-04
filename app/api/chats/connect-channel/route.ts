@@ -7,12 +7,10 @@ export async function POST() {
         const channelId = process.env.AMOCRM_CHANNEL_ID;
         const channelSecret = process.env.AMOCRM_CHANNEL_SECRET;
 
-        // ВАЖНО: Используем присланный код!
-        const accountId = 'amo.ext.32937090'; // или process.env.AMOCRM_ACCOUNT_CODE
+        // ВАЖНО: Используем code из ответа!
+        const accountId = 'amo.ext.32937090';
 
-        // Проверяем наличие переменных
         if (!channelId || !channelSecret) {
-            console.error('Missing channel credentials:', { channelId, channelSecret });
             return NextResponse.json(
                 { error: 'Channel credentials not configured' },
                 { status: 500 }
@@ -25,9 +23,9 @@ export async function POST() {
         const path = `/v2/origin/custom/${channelId}/connect`;
         const url = `https://amojo.amocrm.ru${path}`;
 
-        // Тело запроса - используем accountId в правильном формате!
+        // Тело запроса - используем code!
         const body = {
-            account_id: accountId, // "amo.ext.32937090"
+            account_id: accountId,
             title: 'Чат для сделок',
             hook_api_version: 'v2',
         };
@@ -52,7 +50,7 @@ export async function POST() {
             'X-Signature': signature,
         };
 
-        console.log('Connecting channel...', { url, headers, body });
+        console.log('Connecting channel...', { url, accountId });
 
         const response = await fetch(url, {
             method: 'POST',
@@ -67,7 +65,7 @@ export async function POST() {
             return NextResponse.json({ error: data }, { status: response.status });
         }
 
-        // 🎉 УСПЕХ! Возвращаем scope_id
+        // 🎉 УСПЕХ!
         console.log('✅ Channel connected! Scope ID:', data.scope_id);
 
         return NextResponse.json({
