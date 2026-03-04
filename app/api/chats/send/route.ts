@@ -21,6 +21,15 @@ interface DealWithContacts {
     }
 }
 
+// Тип для результата отправки сообщения
+interface SendMessageResult {
+    message?: {
+        msgid?: string
+        id?: string
+    }
+    conversation_id?: string
+}
+
 export async function POST(request: Request) {
     try {
         const { dealId, text, userId } = await request.json();
@@ -64,21 +73,24 @@ export async function POST(request: Request) {
         // 3. Создаем conversation_id
         const conversationId = `deal_${dealId}`;
 
-        // 4. Отправляем сообщение со ВСЕМИ 7 аргументами
+        // 4. Отправляем сообщение
         const result = await chatService.sendMessage(
             conversationId,
             text,
             userId,
             user.name,
-            userAmojoId,  // ВАЖНО: передаем amojo_id!
+            userAmojoId,
             contact.id,
             contact.name
-        );
+        ) as SendMessageResult;
+
+        // 5. Получаем ID сообщения (может быть в разных полях)
+        const messageId = result?.message?.msgid || result?.message?.id;
 
         return NextResponse.json({
             success: true,
             message: {
-                id: result?.msgid,
+                id: messageId || Date.now().toString(),
                 text: text,
                 created_at: Math.floor(Date.now() / 1000),
                 author_id: userId

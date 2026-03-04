@@ -4,28 +4,6 @@ import { cookies } from 'next/headers'
 import { AmoCrmChatService } from '@/lib/amocrm-chat-service'
 import { AmoCrmService } from '@/lib/amocrm-service'
 
-// Типы для ответов от API чатов
-interface ChatMessageSender {
-    id: string
-    name: string
-    client_id?: string
-    avatar?: string
-}
-
-interface ChatMessage {
-    timestamp: number
-    sender: ChatMessageSender
-    message: {
-        id: string
-        type: string
-        text: string
-    }
-}
-
-interface ChatMessageResponse {
-    messages: ChatMessage[]
-}
-
 // Тип для сделки с контактами
 interface DealWithContact {
     id: number
@@ -39,55 +17,36 @@ interface DealWithContact {
     }
 }
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ dealId: string }> }
-) {
-    try {
-        const { dealId } = await params
-        console.log('[CHAT API] Fetching chat for deal:', dealId)
-
-        const cookieStore = await cookies()
-        const userCookie = cookieStore.get('user')
-
-        if (!userCookie) {
-            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-        }
-
-        const user = JSON.parse(userCookie.value)
-        const dealIdNum = parseInt(dealId)
-
-        // Генерируем conversation_id на основе сделки
-        const conversationId = `deal_${dealIdNum}`
-
-        const chatService = new AmoCrmChatService()
-
-        // Получаем сообщения чата
-        console.log('[CHAT API] Getting messages for conversation:', conversationId)
-        const response = await chatService.getChatMessages(conversationId) as ChatMessageResponse
-        const messages = response?.messages || []
-        console.log(`[CHAT API] Found ${messages.length} messages`)
-
-        // Обогащаем сообщения информацией об авторах
-        const enrichedMessages = messages.map((msg: ChatMessage) => ({
-            id: msg.message.id,
-            text: msg.message.text,
-            created_at: msg.timestamp,
-            author_id: msg.sender.id === user.id.toString() ? user.id : 0,
-            author_name: msg.sender.id === user.id.toString() ? 'Вы' : (msg.sender.name || 'Клиент'),
-            is_client: msg.sender.id !== user.id.toString()
-        }))
-
-        return NextResponse.json({ messages: enrichedMessages })
-
-    } catch (error) {
-        console.error('[CHAT API] Error fetching chat:', error)
-        return NextResponse.json(
-            { error: 'Failed to fetch chat' },
-            { status: 500 }
-        )
+// Тип для сообщения из API чатов
+interface ChatMessage {
+    timestamp: number
+    sender: {
+        id: string
+        name: string
+        client_id?: string
+    }
+    message: {
+        id: string
+        type: string
+        text: string
     }
 }
+
+// Тип для нового сообщения из ответа API
+interface NewMessage {
+    msgid: string
+    conversation_id: string
+    // Другие поля могут быть, но они не важны для нас
+}
+
+// Тип для ответа при отправке сообщения
+interface SendMessageResponse {
+    new_message?: NewMessage
+}
+
+// Простое in-memory хранилище для conversation_id
+// В продакшене лучше использовать Redis или БД
+const conversationStore = new Map<number, string>();
 
 export async function POST(
     request: Request,
@@ -98,6 +57,8 @@ export async function POST(
         const body = await request.json()
         const { text } = body
 
+        console.log('[CHAT API] POST - Sending message to deal:', dealId, 'Text:', text)
+
         const cookieStore = await cookies()
         const userCookie = cookieStore.get('user')
 
@@ -108,10 +69,8 @@ export async function POST(
         const user = JSON.parse(userCookie.value)
         const dealIdNum = parseInt(dealId)
 
-        // Получаем информацию о контакте из сделки
+        // Получаем amojo_id пользователя
         const amoCrmService = new AmoCrmService()
-
-        // 1. Получаем amojo_id пользователя АВТОМАТИЧЕСКИ!
         const userAmojoId = await amoCrmService.getUserAmojoId(user.id)
 
         if (!userAmojoId) {
@@ -121,8 +80,9 @@ export async function POST(
                 { status: 500 }
             )
         }
+        console.log('[CHAT API] Got user amojo_id:', userAmojoId)
 
-        // 2. Получаем сделку и контакт
+        // Получаем информацию о сделке и контакте
         const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContact[]
         const currentDeal = deals.find((d: DealWithContact) => d.id === dealIdNum)
 
@@ -132,32 +92,45 @@ export async function POST(
 
         const contact = currentDeal._embedded?.contacts?.[0]
         if (!contact) {
-            return NextResponse.json({ error: 'No contact found' }, { status: 400 })
+            return NextResponse.json({ error: 'No contact found for this deal' }, { status: 400 })
         }
 
-        const conversationId = `deal_${dealIdNum}`
+        // Используем сохраненный conversation_id или создаем временный
+        const existingConversationId = conversationStore.get(dealIdNum);
+        const conversationId = existingConversationId || `deal_${dealIdNum}`;
+        console.log('[CHAT API] Using conversation_id:', conversationId);
+
         const chatService = new AmoCrmChatService()
 
-        // 3. Отправляем сообщение с автоматически полученным amojo_id
+        // Отправляем сообщение
         const result = await chatService.sendMessage(
             conversationId,
             text,
             user.id,
             user.name,
-            userAmojoId,  // Передаем полученный amojo_id!
+            userAmojoId,
             contact.id,
             contact.name
-        )
+        ) as SendMessageResponse;
+
+        console.log('[CHAT API] Send message result:', JSON.stringify(result, null, 2))
+
+        // ВАЖНО: Сохраняем реальный conversation_id из ответа
+        if (result?.new_message?.conversation_id &&
+            result.new_message.conversation_id !== conversationId) {
+
+            const realConversationId = result.new_message.conversation_id;
+            conversationStore.set(dealIdNum, realConversationId);
+            console.log(`[CHAT API] Saved real conversation_id for deal ${dealIdNum}: ${realConversationId}`);
+        }
 
         return NextResponse.json({
             success: true,
             message: {
-                id: result?.msgid,
+                id: result?.new_message?.msgid,
                 text: text,
                 created_at: Math.floor(Date.now() / 1000),
-                author_id: user.id,
-                author_name: 'Вы',
-                is_client: false
+                author_id: user.id
             }
         })
 
@@ -165,6 +138,62 @@ export async function POST(
         console.error('[CHAT API] Error sending message:', error)
         return NextResponse.json(
             { error: 'Failed to send message' },
+            { status: 500 }
+        )
+    }
+}
+
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ dealId: string }> }
+) {
+    try {
+        const { dealId } = await params
+        const dealIdNum = parseInt(dealId)
+
+        console.log('[CHAT API] GET - Fetching chat for deal:', dealId)
+
+        const cookieStore = await cookies()
+        const userCookie = cookieStore.get('user')
+
+        if (!userCookie) {
+            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+        }
+
+        const user = JSON.parse(userCookie.value)
+
+        // Получаем сохраненный conversation_id
+        const savedConversationId = conversationStore.get(dealIdNum);
+
+        console.log('[CHAT API] Retrieved conversation_id from store:', savedConversationId);
+
+        // Если нет сохраненного conversation_id, пробуем временный
+        const conversationId = savedConversationId || `deal_${dealIdNum}`;
+        console.log('[CHAT API] Using conversation_id:', conversationId);
+
+        const chatService = new AmoCrmChatService()
+
+        // Получаем сообщения чата
+        console.log('[CHAT API] Getting messages for conversation:', conversationId)
+        const messages = await chatService.getChatMessages(conversationId)
+        console.log(`[CHAT API] Found ${messages.length} messages`)
+
+        // Обогащаем сообщения информацией об авторах
+        const enrichedMessages = messages.map((msg: ChatMessage) => ({
+            id: msg.message.id,
+            text: msg.message.text,
+            created_at: msg.timestamp,
+            author_id: msg.sender.id === `user_${user.id}` ? user.id : 0,
+            author_name: msg.sender.id === `user_${user.id}` ? 'Вы' : (msg.sender.name || 'Клиент'),
+            is_client: msg.sender.id !== `user_${user.id}`
+        }))
+
+        return NextResponse.json({ messages: enrichedMessages })
+
+    } catch (error) {
+        console.error('[CHAT API] Error fetching chat:', error)
+        return NextResponse.json(
+            { error: 'Failed to fetch chat' },
             { status: 500 }
         )
     }
