@@ -4,9 +4,18 @@ import crypto from 'crypto';
 
 export async function POST() {
     try {
-        const channelId = process.env.AMOCRM_CHANNEL_ID!;
-        const channelSecret = process.env.AMOCRM_CHANNEL_SECRET!;
+        const channelId = process.env.AMOCRM_CHANNEL_ID;
+        const channelSecret = process.env.AMOCRM_CHANNEL_SECRET;
         const accountId = '32937090'; // Ваш ID аккаунта
+
+        // Проверяем наличие переменных
+        if (!channelId || !channelSecret) {
+            console.error('Missing channel credentials:', { channelId, channelSecret });
+            return NextResponse.json(
+                { error: 'Channel credentials not configured' },
+                { status: 500 }
+            );
+        }
 
         const method = 'POST';
         const contentType = 'application/json';
@@ -56,7 +65,7 @@ export async function POST() {
             return NextResponse.json({ error: data }, { status: response.status });
         }
 
-        // 🎉 УСПЕХ! Сохраняем scope_id
+        // 🎉 УСПЕХ! Возвращаем scope_id
         console.log('✅ Channel connected! Scope ID:', data.scope_id);
 
         return NextResponse.json({
@@ -66,7 +75,21 @@ export async function POST() {
         });
 
     } catch (error) {
-        console.error('Error:', error);
-        return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+        console.error('Error connecting channel:', error);
+        return NextResponse.json(
+            { error: 'Internal server error' },
+            { status: 500 }
+        );
     }
+}
+
+// Добавляем OPTIONS для CORS если нужно
+export async function OPTIONS() {
+    return NextResponse.json({}, {
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
 }
