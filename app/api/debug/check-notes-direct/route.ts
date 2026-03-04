@@ -32,8 +32,7 @@ export async function GET() {
         let data;
         try {
             data = JSON.parse(text);
-        } catch (error) {
-            alert(error);
+        } catch (e) {
             return NextResponse.json({
                 error: 'Invalid JSON response',
                 text: text.substring(0, 500)
@@ -49,6 +48,7 @@ export async function GET() {
 
     } catch (error) {
         console.error('[NOTES] Error:', error);
+        // Убираем alert! Используем только console.error
         return NextResponse.json({
             error: 'Internal error',
             details: error instanceof Error ? error.message : String(error)
