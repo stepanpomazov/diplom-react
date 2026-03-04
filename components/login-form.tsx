@@ -19,7 +19,7 @@ export function LoginForm() {
 
     useEffect(() => {
         if (isAuthenticated) {
-            router.push('/dashboard')
+            router.push('/')
         }
     }, [isAuthenticated, router])
 
