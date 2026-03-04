@@ -2,52 +2,64 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { AmoCrmService } from '@/lib/amocrm-service'
 
-export async function POST() {
+export async function POST(request: Request) {
     try {
-       // const { email, password } = await request.json()
+        const { email } = await request.json()
+        console.log('[LOGIN] Attempt for email:', email)
 
-        // В Next.js 15 cookies() возвращает Promise
         const cookieStore = await cookies()
 
-        // ВРЕМЕННО: Для разработки пропускаем проверку пароля
-        if (process.env.NODE_ENV === 'development') {
-            // Создаем сервис для получения данных из amoCRM
-            const amoCrmService = new AmoCrmService()
-            const user = await amoCrmService.getCurrentUser()
+        // Единая логика для всех окружений
+        const amoCrmService = new AmoCrmService()
+        const user = await amoCrmService.getCurrentUser()
 
-            if (user) {
-                // Устанавливаем куку с ID пользователя
-                cookieStore.set('user_id', user.id.toString(), {
-                    httpOnly: true,
-                    sameSite: 'lax',
-                    maxAge: 60 * 60 * 24 * 7 // 7 дней
-                })
+        console.log('[LOGIN] User from amoCRM:', user)
 
-                return NextResponse.json({
-                    success: true,
-                    user: {
-                        id: user.id,
-                        name: user.name,
-                        email: user.email,
-                        role: user.rights?.leads?.view === 'all' ? 'admin' : 'employee'
-                    }
-                })
+        if (user) {
+            // Сохраняем полную информацию о пользователе
+            const userData = {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.rights?.leads?.view === 'all' ? 'admin' : 'employee'
             }
+
+            console.log('[LOGIN] Setting user cookie with data:', userData)
+
+            // Сохраняем объект пользователя целиком
+            cookieStore.set('user', JSON.stringify(userData), {
+                httpOnly: false,
+                secure: true, // всегда true для HTTPS
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7, // 7 дней
+                path: '/'
+            })
+
+            // Также сохраняем ID отдельно для обратной совместимости
+            cookieStore.set('user_id', user.id.toString(), {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7
+            })
+
+            return NextResponse.json({
+                success: true,
+                user: userData
+            })
         }
 
-        // Для production или если пользователь не найден
+        // Если пользователь не найден
         return NextResponse.json(
             {
                 success: false,
-                error: process.env.NODE_ENV === 'production'
-                    ? 'Аутентификация через amoCRM будет доступна позже'
-                    : 'Пользователь не найден в amoCRM'
+                error: 'Пользователь не найден в amoCRM'
             },
             { status: 401 }
         )
 
     } catch (error) {
-        console.error('Login error:', error)
+        console.error('[LOGIN] Error:', error)
         return NextResponse.json(
             { success: false, error: 'Внутренняя ошибка сервера' },
             { status: 500 }

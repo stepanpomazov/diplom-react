@@ -128,32 +128,13 @@ export class AmoCrmService {
         }
     }
 
-    // ПОЛУЧАЕМ СДЕЛКИ С ПРАВИЛЬНЫМ ID ПОЛЬЗОВАТЕЛЯ
-    async getUserDeals(userId: number): Promise<AmoCrmDeal[]> {
-        try {
-            console.log(`[AmoCRM] Getting deals for user ${userId}`)
-
-            // Важно: используем правильный параметр фильтрации
-            const data = await this.request<ApiResponse<AmoCrmDeal>>(
-                `/leads?filter[responsible_user_id]=${userId}&order[created_at]=desc&limit=50`
-            )
-
-            const deals = data._embedded?.leads || []
-            console.log(`[AmoCRM] Found ${deals.length} deals for user ${userId}`)
-
-            return deals
-        } catch (error) {
-            console.error('Error getting deals:', error)
-            return []
-        }
-    }
-
     // ПОЛУЧАЕМ ВСЕ СДЕЛКИ АККАУНТА (для отладки)
     async getAllDeals(): Promise<AmoCrmDeal[]> {
         try {
+            console.log('[AmoCRM] Fetching all deals...')
             const data = await this.request<ApiResponse<AmoCrmDeal>>('/leads?order[created_at]=desc&limit=50')
             const deals = data._embedded?.leads || []
-            console.log(`[AmoCRM] Found ${deals.length} deals in total`)
+            console.log(`[AmoCRM] Found ${deals.length} deals total`)
             return deals
         } catch (error) {
             console.error('Error getting all deals:', error)
@@ -206,7 +187,9 @@ export class AmoCrmService {
 
             stats.totalAmount += amount
 
-            // Статусы (142 - успешно, 143 - проиграно)
+            // Статусы (настройте под свою CRM)
+            // 142 - Успешно реализовано
+            // 143 - Закрыто и не реализовано
             if (statusId === 142) {
                 stats.wonDeals++
             } else if (statusId === 143) {
@@ -234,15 +217,42 @@ export class AmoCrmService {
         return stats
     }
 
-    async getUserDealsWithDetails(userId: number): Promise<AmoCrmDeal[]> {
+    async getUserDeals(userId: number): Promise<AmoCrmDeal[]> {
         try {
+            console.log(`[AmoCRM] Fetching deals for user ${userId}...`)
+
+            // ВАЖНО: используем правильный параметр фильтрации
+            // responsible_user_id - это поле, по которому фильтруем
+            const data = await this.request<ApiResponse<AmoCrmDeal>>(
+                `/leads?filter[responsible_user_id]=${userId}&order[created_at]=desc&limit=50`
+            )
+
+            const deals = data._embedded?.leads || []
+            console.log(`[AmoCRM] Found ${deals.length} deals for user ${userId}`)
+
+            // Для отладки покажем первую сделку если есть
+            if (deals.length > 0) {
+                console.log('[AmoCRM] First deal:', deals[0])
+            }
+
+            return deals
+        } catch (error) {
+            console.error('Error getting user deals:', error)
+            return []
+        }
+    }
+
+    async getUserDealsWithContacts(userId: number): Promise<AmoCrmDeal[]> {
+        try {
+            console.log(`[AmoCRM] Fetching deals with contacts for user ${userId}...`)
             const data = await this.request<ApiResponse<AmoCrmDeal>>(
                 `/leads?filter[responsible_user_id]=${userId}&with=contacts,companies&order[created_at]=desc&limit=20`
             )
             return data._embedded?.leads || []
         } catch (error) {
-            console.error('Error getting deals with details:', error)
+            console.error('Error getting deals with contacts:', error)
             return []
         }
     }
+
 }
