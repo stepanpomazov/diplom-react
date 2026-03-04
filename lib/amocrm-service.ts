@@ -143,11 +143,12 @@ export class AmoCrmService {
     }
 
     // ПОЛУЧАЕМ СПИСОК ПОЛЬЗОВАТЕЛЕЙ (для отладки)
+    // lib/amocrm-service.ts
     async getUsers(): Promise<AmoCrmUser[]> {
         try {
             const data = await this.request<ApiResponse<AmoCrmUser>>('/users')
             const users = data._embedded?.users || []
-            console.log('[AmoCRM] Users:', users.map((u: AmoCrmUser) => ({
+            console.log('[AmoCRM] Users loaded:', users.map(u => ({
                 id: u.id,
                 name: u.name,
                 email: u.email

@@ -1,3 +1,4 @@
+// app/api/auth/login/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { AmoCrmService } from '@/lib/amocrm-service'
@@ -8,53 +9,40 @@ export async function POST(request: Request) {
         console.log('[LOGIN] Attempt for email:', email)
 
         const cookieStore = await cookies()
-
-        // Единая логика для всех окружений
         const amoCrmService = new AmoCrmService()
-        const user = await amoCrmService.getCurrentUser()
 
-        console.log('[LOGIN] User from amoCRM:', user)
+        // Получаем ВСЕХ пользователей из amoCRM
+        const allUsers = await amoCrmService.getUsers()
+        console.log('[LOGIN] All users:', allUsers.map(u => ({ id: u.id, name: u.name, email: u.email })))
 
-        if (user) {
-            // Сохраняем полную информацию о пользователе
+        // Ищем пользователя по email (stpomazov@mail.ru)
+        const foundUser = allUsers.find(u => u.email === email)
+
+        if (foundUser) {
+            console.log('[LOGIN] Found user by email:', foundUser)
+
             const userData = {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.rights?.leads?.view === 'all' ? 'admin' : 'employee'
+                id: foundUser.id,  // ВАЖНО: используем 13574874, а не 32937090!
+                name: foundUser.name,
+                email: foundUser.email,
+                role: foundUser.rights?.leads?.view === 'all' ? 'admin' : 'employee'
             }
 
-            console.log('[LOGIN] Setting user cookie with data:', userData)
+            console.log('[LOGIN] Setting user cookie with ID:', userData.id)
 
-            // Сохраняем объект пользователя целиком
             cookieStore.set('user', JSON.stringify(userData), {
                 httpOnly: false,
-                secure: true, // всегда true для HTTPS
+                secure: true,
                 sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 7, // 7 дней
+                maxAge: 60 * 60 * 24 * 7,
                 path: '/'
             })
 
-            // Также сохраняем ID отдельно для обратной совместимости
-            cookieStore.set('user_id', user.id.toString(), {
-                httpOnly: true,
-                secure: true,
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 7
-            })
-
-            return NextResponse.json({
-                success: true,
-                user: userData
-            })
+            return NextResponse.json({ success: true, user: userData })
         }
 
-        // Если пользователь не найден
         return NextResponse.json(
-            {
-                success: false,
-                error: 'Пользователь не найден в amoCRM'
-            },
+            { success: false, error: 'Пользователь не найден' },
             { status: 401 }
         )
 
