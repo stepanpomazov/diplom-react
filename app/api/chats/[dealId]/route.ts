@@ -198,11 +198,11 @@ export async function POST(
         const amoCrmService = new AmoCrmService()
 
         // Если создаем примечание
+        // Если создаем примечание
         if (type === 'notes') {
             try {
-                console.log('[CHAT API] Creating note for deal:', dealIdNum)
+                console.log('[CHAT API] Creating note for deal:', dealIdNum);
 
-                // Используем fetch напрямую для создания примечания
                 const response = await fetch(
                     `https://${process.env.AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4/leads/${dealIdNum}/notes`,
                     {
@@ -219,29 +219,61 @@ export async function POST(
                             params: {}
                         }])
                     }
-                )
+                );
 
+                // Получаем ответ от CRM
+                const responseText = await response.text();
+                console.log('[CHAT API] Create note response status:', response.status);
+                console.log('[CHAT API] Create note response body:', responseText);
+
+                // Проверяем статус ответа
                 if (!response.ok) {
-
+                    console.error('[CHAT API] Failed to create note:', response.status, responseText);
+                    return NextResponse.json(
+                        {
+                            error: 'Failed to create note',
+                            status: response.status,
+                            details: responseText
+                        },
+                        { status: response.status }
+                    );
                 }
 
-                console.log('[CHAT API] Note created successfully')
+                // Парсим ответ CRM
+                let responseData;
+                try {
+                    responseData = JSON.parse(responseText);
+                } catch (_) {
+                    console.error('[CHAT API] Failed to parse response:', responseText);
+                    return NextResponse.json(
+                        { error: 'Invalid JSON response from CRM', text: responseText },
+                        { status: 500 }
+                    );
+                }
+
+                // Получаем ID созданного примечания из ответа
+                const createdNote = responseData._embedded?.notes?.[0];
+
+                console.log('[CHAT API] Note created successfully, ID:', createdNote?.id);
 
                 return NextResponse.json({
                     success: true,
                     note: {
-                        id: Date.now().toString(),
+                        id: createdNote?.id?.toString() || Date.now().toString(),
                         text: text,
                         created_at: Math.floor(Date.now() / 1000)
                     }
-                })
+                });
 
             } catch (error) {
-                console.error('[CHAT API] Error creating note:', error)
+                console.error('[CHAT API] Error creating note:', error);
                 return NextResponse.json(
-                    { error: 'Failed to create note' },
+                    {
+                        error: 'Failed to create note',
+                        details: error instanceof Error ? error.message : String(error)
+                    },
                     { status: 500 }
-                )
+                );
             }
         }
         // Если отправляем сообщение в чат
