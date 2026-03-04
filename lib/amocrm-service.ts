@@ -20,6 +20,26 @@ interface AmoCrmDeal {
     }
 }
 
+export interface DealWithContacts {
+    id: number
+    name: string
+    price: number
+    status_id: number
+    created_at: number
+    _embedded?: {
+        contacts?: Array<{
+            id: number
+            name: string
+            first_name?: string
+            last_name?: string
+        }>
+        companies?: Array<{
+            id: number
+            name: string
+        }>
+    }
+}
+
 interface AmoCrmUser {
     id: number
     name: string
@@ -243,10 +263,9 @@ export class AmoCrmService {
         }
     }
 
-    async getUserDealsWithContacts(userId: number): Promise<AmoCrmDeal[]> {
+    async getUserDealsWithContacts(userId: number): Promise<DealWithContacts[]> {
         try {
-            console.log(`[AmoCRM] Fetching deals with contacts for user ${userId}...`)
-            const data = await this.request<ApiResponse<AmoCrmDeal>>(
+            const data = await this.request<ApiResponse<DealWithContacts>>(
                 `/leads?filter[responsible_user_id]=${userId}&with=contacts,companies&order[created_at]=desc&limit=20`
             )
             return data._embedded?.leads || []
