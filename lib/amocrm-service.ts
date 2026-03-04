@@ -1,4 +1,62 @@
 // lib/amocrm-service.ts
+// Типы для ответов от amoCRM
+interface AmoCrmDeal {
+    id: number
+    name: string
+    price: number
+    status_id: number
+    created_at: number
+    closed_at: number
+    responsible_user_id: number
+    _embedded?: {
+        contacts?: Array<{
+            id: number
+            name: string
+        }>
+        companies?: Array<{
+            id: number
+            name: string
+        }>
+    }
+}
+
+interface AmoCrmUser {
+    id: number
+    name: string
+    email: string
+    rights?: {
+        leads?: {
+            view: 'all' | 'own' | 'none'
+        }
+    }
+}
+
+interface AmoCrmAccount {
+    id: number
+    name: string
+    subdomain: string
+    current_user_id: number
+}
+
+// Общий интерфейс для ответов API
+interface ApiResponse<T> {
+    _embedded?: {
+        leads?: T[]
+        users?: T[]
+    }
+    _links?: {
+        self?: { href: string }
+        next?: { href: string }
+    }
+}
+
+// Интерфейс для логирования
+interface LogData {
+    status: number
+    hasData: boolean
+    count: number
+}
+
 export class AmoCrmService {
     private accessToken: string
     private subdomain: string
@@ -12,7 +70,8 @@ export class AmoCrmService {
         }
     }
 
-    private async request(endpoint: string) {
+    private async request<T>(endpoint: string): Promise<T> {
+        console.log(`[AmoCRM] Requesting: ${endpoint}`)
         const response = await fetch(`https://${this.subdomain}.amocrm.ru/api/v4${endpoint}`, {
             headers: {
                 'Authorization': `Bearer ${this.accessToken}`,
@@ -22,39 +81,38 @@ export class AmoCrmService {
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}))
+            console.error(`[AmoCRM] Error ${response.status}:`, error)
             throw new Error(`AmoCRM API error: ${response.status} - ${error.detail || response.statusText}`)
         }
 
-        return response.json()
+        const data = await response.json() as T & ApiResponse<AmoCrmDeal>
+
+        // Безопасное логирование
+        const logData: LogData = {
+            status: response.status,
+            hasData: !!data?._embedded, // Временно оставляем, но можно заменить
+            count: data?._embedded?.leads?.length || 0 // Временно оставляем
+        }
+        console.log(`[AmoCRM] Response for ${endpoint}:`, logData)
+
+        return data as T
     }
 
-    // ПОЛУЧАЕМ РЕАЛЬНОГО ПОЛЬЗОВАТЕЛЯ из amoCRM
-    async getCurrentUser() {
+    // ПОЛУЧАЕМ РЕАЛЬНОГО ПОЛЬЗОВАТЕЛЯ
+    async getCurrentUser(): Promise<AmoCrmUser | null> {
         try {
-            // Получаем информацию об аккаунте - там есть данные о текущем пользователе
-            const accountData = await this.request('/account')
-            console.log('Account data:', accountData)
+            // Сначала получаем информацию об аккаунте
+            const accountData = await this.request<AmoCrmAccount>('/account')
+            console.log('[AmoCRM] Account data:', accountData)
 
-            // В accountData может быть информация о текущем пользователе
-            // Если нет, пробуем получить список пользователей
-            if (!accountData.id) {
-                // Получаем список пользователей и берем первого
-                const usersData = await this.request('/users')
-                const firstUser = usersData._embedded?.users?.[0]
+            // ID текущего пользователя должен быть в accountData.current_user_id
+            const currentUserId = accountData.current_user_id
 
-                if (firstUser) {
-                    return {
-                        id: firstUser.id,
-                        name: firstUser.name,
-                        email: firstUser.email,
-                        rights: firstUser.rights
-                    }
-                }
-            }
+            if (currentUserId) {
+                // Получаем детальную информацию о пользователе
+                const userData = await this.request<AmoCrmUser>(`/users/${currentUserId}`)
+                console.log('[AmoCRM] User data:', userData)
 
-            // Если нашли ID в accountData, получаем детальную информацию
-            if (accountData.id) {
-                const userData = await this.request(`/users/${accountData.id}`)
                 return {
                     id: userData.id,
                     name: userData.name,
@@ -70,19 +128,56 @@ export class AmoCrmService {
         }
     }
 
-    // ПОЛУЧАЕМ РЕАЛЬНЫЕ СДЕЛКИ пользователя
-    async getUserDeals(userId: number) {
+    // ПОЛУЧАЕМ СДЕЛКИ С ПРАВИЛЬНЫМ ID ПОЛЬЗОВАТЕЛЯ
+    async getUserDeals(userId: number): Promise<AmoCrmDeal[]> {
         try {
-            const data = await this.request(`/leads?filter[responsible_user_id]=${userId}&order[created_at]=desc&limit=50`)
-            console.log(`Found ${data._embedded?.leads?.length || 0} deals for user ${userId}`)
-            return data._embedded?.leads || []
+            console.log(`[AmoCRM] Getting deals for user ${userId}`)
+
+            // Важно: используем правильный параметр фильтрации
+            const data = await this.request<ApiResponse<AmoCrmDeal>>(
+                `/leads?filter[responsible_user_id]=${userId}&order[created_at]=desc&limit=50`
+            )
+
+            const deals = data._embedded?.leads || []
+            console.log(`[AmoCRM] Found ${deals.length} deals for user ${userId}`)
+
+            return deals
         } catch (error) {
             console.error('Error getting deals:', error)
             return []
         }
     }
 
-    // ПОЛУЧАЕМ РЕАЛЬНУЮ СТАТИСТИКУ по сделкам
+    // ПОЛУЧАЕМ ВСЕ СДЕЛКИ АККАУНТА (для отладки)
+    async getAllDeals(): Promise<AmoCrmDeal[]> {
+        try {
+            const data = await this.request<ApiResponse<AmoCrmDeal>>('/leads?order[created_at]=desc&limit=50')
+            const deals = data._embedded?.leads || []
+            console.log(`[AmoCRM] Found ${deals.length} deals in total`)
+            return deals
+        } catch (error) {
+            console.error('Error getting all deals:', error)
+            return []
+        }
+    }
+
+    // ПОЛУЧАЕМ СПИСОК ПОЛЬЗОВАТЕЛЕЙ (для отладки)
+    async getUsers(): Promise<AmoCrmUser[]> {
+        try {
+            const data = await this.request<ApiResponse<AmoCrmUser>>('/users')
+            const users = data._embedded?.users || []
+            console.log('[AmoCRM] Users:', users.map((u: AmoCrmUser) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email
+            })))
+            return users
+        } catch (error) {
+            console.error('Error getting users:', error)
+            return []
+        }
+    }
+
     async getUserStats(userId: number) {
         const deals = await this.getUserDeals(userId)
 
@@ -104,17 +199,14 @@ export class AmoCrmService {
             conversion: 0
         }
 
-        deals.forEach((deal: any) => {
+        deals.forEach((deal: AmoCrmDeal) => {
             const amount = deal.price || 0
             const createdAt = new Date(deal.created_at * 1000)
             const statusId = deal.status_id
 
             stats.totalAmount += amount
 
-            // В amoCRM статусы сделок могут быть разными
-            // Обычно:
-            // 142 - Успешно реализовано
-            // 143 - Закрыто и не реализовано
+            // Статусы (142 - успешно, 143 - проиграно)
             if (statusId === 142) {
                 stats.wonDeals++
             } else if (statusId === 143) {
@@ -142,10 +234,11 @@ export class AmoCrmService {
         return stats
     }
 
-    // ПОЛУЧАЕМ СДЕЛКИ С КОНТАКТАМИ
-    async getUserDealsWithDetails(userId: number) {
+    async getUserDealsWithDetails(userId: number): Promise<AmoCrmDeal[]> {
         try {
-            const data = await this.request(`/leads?filter[responsible_user_id]=${userId}&with=contacts,companies&order[created_at]=desc&limit=20`)
+            const data = await this.request<ApiResponse<AmoCrmDeal>>(
+                `/leads?filter[responsible_user_id]=${userId}&with=contacts,companies&order[created_at]=desc&limit=20`
+            )
             return data._embedded?.leads || []
         } catch (error) {
             console.error('Error getting deals with details:', error)

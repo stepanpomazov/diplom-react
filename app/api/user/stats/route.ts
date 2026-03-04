@@ -13,12 +13,26 @@ export async function GET() {
         }
 
         const user = JSON.parse(userCookie.value)
+        console.log('[API] User from cookie:', user)
+
         const amoCrm = new AmoCrmService()
 
-        const [stats, recentDeals] = await Promise.all([
-            amoCrm.getUserStats(user.id),
-            amoCrm.getUserDealsWithDetails(user.id)
-        ])
+        // Для отладки: получим список всех пользователей
+        const allUsers = await amoCrm.getUsers()
+
+        // Получим все сделки аккаунта
+        const allDeals = await amoCrm.getAllDeals()
+
+        // Получим сделки конкретного пользователя
+        const stats = await amoCrm.getUserStats(user.id)
+        const recentDeals = await amoCrm.getUserDealsWithDetails(user.id)
+
+        console.log('[API] Debug info:', {
+            userId: user.id,
+            allUsersCount: allUsers.length,
+            allDealsCount: allDeals.length,
+            userDealsCount: recentDeals.length
+        })
 
         return NextResponse.json({
             user: {
@@ -27,7 +41,11 @@ export async function GET() {
                 email: user.email
             },
             stats,
-            recentDeals
+            recentDeals,
+            debug: {
+                allUsers,
+                allDealsCount: allDeals.length
+            }
         })
 
     } catch (error) {
