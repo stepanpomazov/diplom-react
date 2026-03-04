@@ -1,42 +1,68 @@
 // app/api/auth/login/route.ts
-import {AmoCrmService} from "@/lib/amocrm-service";
-import {NextResponse} from "next/server";
+import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { AmoCrmService } from '@/lib/amocrm-service'
 
 export async function POST(request: Request) {
     try {
         const { email } = await request.json()
+        console.log('[LOGIN] Attempt for email:', email)
 
+        const cookieStore = await cookies()
         const amoCrmService = new AmoCrmService()
 
-        // ПОЛУЧАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+        // 1. Получаем ВСЕХ пользователей из amoCRM
         const allUsers = await amoCrmService.getUsers()
-        console.log('All users:', allUsers)
+        console.log('[LOGIN] All users:', allUsers.map(u => ({
+            id: u.id,
+            name: u.name,
+            email: u.email
+        })))
 
-        // ИЩЕМ ПОЛЬЗОВАТЕЛЯ С ВАШИМ EMAIL
+        // 2. Ищем пользователя с таким email
+        // Ваш правильный email: stpomazov@mail.ru
         const currentUser = allUsers.find(u => u.email === email)
 
         if (currentUser) {
-            // ВАЖНО: сохраняем ID пользователя (13574874), а не ID аккаунта!
+            console.log('[LOGIN] Found user by email:', currentUser)
+
+            // 3. ВАЖНО: сохраняем ID пользователя (13574874), а не ID аккаунта!
             const userData = {
                 id: currentUser.id,      // 13574874
                 name: currentUser.name,   // "test dev"
                 email: currentUser.email, // "stpomazov@mail.ru"
-                role: 'admin'             // у вас есть права админа
+                role: currentUser.rights?.leads?.view === 'all' ? 'admin' : 'employee'
             }
 
-            cookieStore.set('user', JSON.stringify(userData))
-            return NextResponse.json({ success: true, user: userData })
+            console.log('[LOGIN] Setting user cookie with data:', userData)
+
+            // 4. Сохраняем в куку
+            cookieStore.set({
+                name: 'user',
+                value: JSON.stringify(userData),
+                httpOnly: false,
+                secure: true,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7,
+                path: '/'
+            })
+
+            return NextResponse.json({
+                success: true,
+                user: userData
+            })
         }
 
+        console.log('[LOGIN] User not found with email:', email)
         return NextResponse.json(
             { success: false, error: 'Пользователь не найден' },
             { status: 401 }
         )
 
     } catch (error) {
-        console.error('Login error:', error)
+        console.error('[LOGIN] Error:', error)
         return NextResponse.json(
-            { success: false, error: 'Ошибка входа' },
+            { success: false, error: 'Внутренняя ошибка сервера' },
             { status: 500 }
         )
     }
