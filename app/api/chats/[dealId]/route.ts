@@ -82,15 +82,28 @@ export async function GET(
         }
 
         const user = JSON.parse(userCookie.value)
-        const amoCrmService = new AmoCrmService()
 
         // Если запрашиваем примечания
         if (type === 'notes') {
             try {
                 console.log('[CHAT API] Fetching notes for deal:', dealIdNum)
 
-                // Используем публичный метод для запроса
-                const notesData = await amoCrmService.request<NotesResponse>(`/leads/${dealIdNum}/notes`)
+                // Используем публичный метод getUserDeals или создаем отдельный метод для заметок
+                const response = await fetch(
+                    `https://${process.env.AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4/leads/${dealIdNum}/notes`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.AMOCRM_ACCESS_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                )
+
+                if (!response.ok) {
+
+                }
+
+                const notesData = await response.json() as NotesResponse
                 const notes = notesData?._embedded?.notes || []
 
                 console.log(`[CHAT API] Found ${notes.length} notes`)
@@ -177,6 +190,7 @@ export async function POST(
         }
 
         const user = JSON.parse(userCookie.value)
+        const amoCrmService = new AmoCrmService()
 
         // Если создаем примечание
         if (type === 'notes') {
