@@ -4,39 +4,66 @@ import { cookies } from 'next/headers';
 
 export async function GET() {
     try {
+        console.log('[DEBUG] Starting check-note...');
+
         const cookieStore = await cookies();
         const userCookie = cookieStore.get('user');
 
         if (!userCookie) {
+            console.log('[DEBUG] No user cookie');
             return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
         }
 
-        const dealId = 817274; // ID вашей сделки
+        const dealId = 817274;
+        console.log('[DEBUG] Checking notes for deal:', dealId);
+        console.log('[DEBUG] Using subdomain:', process.env.AMOCRM_SUBDOMAIN);
+        console.log('[DEBUG] Token exists:', !!process.env.AMOCRM_ACCESS_TOKEN);
 
-        // Делаем запрос к amoCRM с сервера (CORS не блокирует серверные запросы)
-        const response = await fetch(
-            `https://${process.env.AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4/leads/${dealId}/notes`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.AMOCRM_ACCESS_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
+        // Делаем запрос к amoCRM с сервера
+        const url = `https://${process.env.AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4/leads/${dealId}/notes`;
+        console.log('[DEBUG] Fetching URL:', url);
+
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${process.env.AMOCRM_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
             }
-        );
+        });
+
+        console.log('[DEBUG] Response status:', response.status);
+        console.log('[DEBUG] Response ok:', response.ok);
+
+        // Получаем текст ответа (не JSON!)
+        const responseText = await response.text();
+        console.log('[DEBUG] Response text length:', responseText.length);
+        console.log('[DEBUG] Response text preview:', responseText.substring(0, 200));
 
         if (!response.ok) {
-            const errorText = await response.text();
             return NextResponse.json(
                 {
                     error: 'Failed to fetch notes',
                     status: response.status,
-                    details: errorText
+                    text: responseText.substring(0, 500)
                 },
                 { status: response.status }
             );
         }
 
-        const data = await response.json();
+        // Пробуем распарсить JSON
+        let data;
+        try {
+            data = JSON.parse(responseText);
+            console.log('[DEBUG] Successfully parsed JSON');
+        } catch (parseError) {
+            console.error('[DEBUG] JSON parse error:', parseError);
+            return NextResponse.json(
+                {
+                    error: 'Invalid JSON response',
+                    text: responseText.substring(0, 500)
+                },
+                { status: 500 }
+            );
+        }
 
         return NextResponse.json({
             success: true,
@@ -46,11 +73,12 @@ export async function GET() {
         });
 
     } catch (error) {
-        console.error('Error checking note:', error);
+        console.error('[DEBUG] Error:', error);
         return NextResponse.json(
             {
                 error: 'Internal server error',
-                details: error instanceof Error ? error.message : String(error)
+                details: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
             },
             { status: 500 }
         );
