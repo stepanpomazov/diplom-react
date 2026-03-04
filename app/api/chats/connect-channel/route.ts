@@ -6,7 +6,9 @@ export async function POST() {
     try {
         const channelId = process.env.AMOCRM_CHANNEL_ID;
         const channelSecret = process.env.AMOCRM_CHANNEL_SECRET;
-        const accountId = 'amo.ext.32937090'; // Ваш ID аккаунта
+
+        // ВАЖНО: Используем присланный код!
+        const accountId = 'amo.ext.32937090'; // или process.env.AMOCRM_ACCOUNT_CODE
 
         // Проверяем наличие переменных
         if (!channelId || !channelSecret) {
@@ -23,9 +25,9 @@ export async function POST() {
         const path = `/v2/origin/custom/${channelId}/connect`;
         const url = `https://amojo.amocrm.ru${path}`;
 
-        // Тело запроса
+        // Тело запроса - используем accountId в правильном формате!
         const body = {
-            account_id: accountId,
+            account_id: accountId, // "amo.ext.32937090"
             title: 'Чат для сделок',
             hook_api_version: 'v2',
         };
@@ -81,15 +83,4 @@ export async function POST() {
             { status: 500 }
         );
     }
-}
-
-// Добавляем OPTIONS для CORS если нужно
-export async function OPTIONS() {
-    return NextResponse.json({}, {
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-    });
 }
