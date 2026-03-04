@@ -1,7 +1,7 @@
 // components/chat-modal.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { X, Send, Loader2, User, Building } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,11 +36,35 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
     const [error, setError] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
+    const loadMessages = useCallback(async () => {
+        if (!deal) return
+        setLoading(true)
+        setError(null)
+        try {
+            const response = await fetch(`/api/chats/${deal.id}`, {
+                credentials: 'include'
+            })
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(data.error || 'Failed to load messages')
+                return
+            }
+
+            setMessages(data.messages)
+        } catch (error) {
+            console.error('Failed to load messages:', error)
+            setError('Ошибка загрузки сообщений')
+        } finally {
+            setLoading(false)
+        }
+    }, [deal])
+
     useEffect(() => {
         if (isOpen && deal) {
             loadMessages()
         }
-    }, [isOpen, deal])
+    }, [isOpen, deal, loadMessages])
 
     useEffect(() => {
         scrollToBottom()
@@ -50,48 +74,17 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
 
-    const loadMessages = async () => {
-        if (!deal) return
-        setLoading(true)
-        setError(null)
-        try {
-            const response = await fetch(`/api/chats/${deal.id}`)
-            const data = await response.json()
-
-            if (!response.ok) {
-                setError(data.error || 'Failed to load messages')
-                return
-            }
-
-            // Добавляем имена авторов
-            const messagesWithAuthors = data.messages.map((msg: Message) => ({
-                ...msg,
-                author_name: msg.author_id === userId ? 'Вы' : 'Клиент',
-                is_client: msg.author_id !== userId
-            }))
-            setMessages(messagesWithAuthors)
-        } catch (error) {
-            console.error('Failed to load messages:', error)
-            setError('Ошибка загрузки сообщений')
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const sendMessage = async () => {
         if (!newMessage.trim() || !deal) return
 
         setSending(true)
         setError(null)
         try {
-            const response = await fetch('/api/chats/send', {
+            const response = await fetch(`/api/chats/${deal.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    dealId: deal.id,
-                    text: newMessage,
-                    userId
-                })
+                body: JSON.stringify({ text: newMessage }),
+                credentials: 'include'
             })
 
             const data = await response.json()
@@ -215,7 +208,7 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
                         <Input
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={handleKeyDown}  // Заменили onKeyPress на onKeyDown
+                            onKeyDown={handleKeyDown}
                             placeholder="Введите сообщение..."
                             disabled={sending}
                         />

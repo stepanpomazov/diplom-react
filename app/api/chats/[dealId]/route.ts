@@ -2,23 +2,41 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { AmoCrmChatService } from '@/lib/amocrm-chat-service'
+import { AmoCrmService } from '@/lib/amocrm-service'
 
-// Типы для сообщений из amoCRM
-interface AmoCrmMessage {
+// Типы для ответов от API чатов
+interface ChatMessageSender {
     id: string
-    text: string
-    created_at: number
-    author_id: number
-    author_name?: string
-    is_client?: boolean
+    name: string
+    client_id?: string
+    avatar?: string
 }
 
-// Тип для чата
-interface AmoCrmChat {
-    id: string
-    chat_id?: string
-    entity_id: number
-    entity_type: string
+interface ChatMessage {
+    timestamp: number
+    sender: ChatMessageSender
+    message: {
+        id: string
+        type: string
+        text: string
+    }
+}
+
+interface ChatMessageResponse {
+    messages: ChatMessage[]
+}
+
+// Тип для сделки с контактами
+interface DealWithContact {
+    id: number
+    name: string
+    price: number
+    _embedded?: {
+        contacts?: Array<{
+            id: number
+            name: string
+        }>
+    }
 }
 
 export async function GET(
@@ -39,32 +57,25 @@ export async function GET(
         const user = JSON.parse(userCookie.value)
         const dealIdNum = parseInt(dealId)
 
+        // Генерируем conversation_id на основе сделки
+        const conversationId = `deal_${dealIdNum}`
+
         const chatService = new AmoCrmChatService()
 
-        // Получаем чат для сделки
-        console.log('[CHAT API] Getting chat for deal:', dealIdNum)
-        const chats = await chatService.getDealChat(dealIdNum)
-        const chat = chats[0] as AmoCrmChat | undefined
-
-        if (!chat) {
-            console.log('[CHAT API] No chat found for deal:', dealIdNum)
-            return NextResponse.json({ messages: [] })
-        }
-
-        console.log('[CHAT API] Found chat:', chat.id)
-
         // Получаем сообщения чата
-        const messages = await chatService.getChatMessages(chat.id) as AmoCrmMessage[]
+        console.log('[CHAT API] Getting messages for conversation:', conversationId)
+        const response = await chatService.getChatMessages(conversationId) as ChatMessageResponse
+        const messages = response?.messages || []
         console.log(`[CHAT API] Found ${messages.length} messages`)
 
         // Обогащаем сообщения информацией об авторах
-        const enrichedMessages = messages.map((msg: AmoCrmMessage) => ({
-            id: msg.id,
-            text: msg.text,
-            created_at: msg.created_at,
-            author_id: msg.author_id,
-            author_name: msg.author_id === user.id ? 'Вы' : 'Клиент',
-            is_client: msg.author_id !== user.id
+        const enrichedMessages = messages.map((msg: ChatMessage) => ({
+            id: msg.message.id,
+            text: msg.message.text,
+            created_at: msg.timestamp,
+            author_id: msg.sender.id === user.id.toString() ? user.id : 0,
+            author_name: msg.sender.id === user.id.toString() ? 'Вы' : (msg.sender.name || 'Клиент'),
+            is_client: msg.sender.id !== user.id.toString()
         }))
 
         return NextResponse.json({ messages: enrichedMessages })
@@ -106,32 +117,41 @@ export async function POST(
             )
         }
 
-        const chatService = new AmoCrmChatService()
+        // Получаем информацию о контакте из сделки
+        const amoCrmService = new AmoCrmService()
+        const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContact[]
+        const currentDeal = deals.find((d: DealWithContact) => d.id === dealIdNum)
 
-        // Получаем чат для сделки
-        console.log('[CHAT API] Getting chat for deal:', dealIdNum)
-        const chats = await chatService.getDealChat(dealIdNum)
-        const existingChat = chats[0] as AmoCrmChat | undefined
-
-        if (!existingChat) {
-            return NextResponse.json(
-                { error: 'Chat not found. Please create chat first.' },
-                { status: 404 }
-            )
+        if (!currentDeal) {
+            return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
         }
 
-        console.log('[CHAT API] Found chat:', existingChat.id)
+        const contact = currentDeal._embedded?.contacts?.[0]
+        if (!contact) {
+            return NextResponse.json({ error: 'No contact found' }, { status: 400 })
+        }
 
-        // Отправляем сообщение
-        const result = await chatService.sendMessageAsUser(existingChat.id, text, user.id) as AmoCrmMessage
+        const conversationId = `deal_${dealIdNum}`
+        const chatService = new AmoCrmChatService()
+
+        // Отправляем сообщение через основной метод sendMessage
+        const result = await chatService.sendMessage(
+            conversationId,
+            text,
+            user.id,
+            user.name,
+            contact.id,
+            contact.name
+        )
+
         console.log('[CHAT API] Message sent successfully')
 
         return NextResponse.json({
             success: true,
             message: {
-                id: result.id,
-                text: result.text,
-                created_at: result.created_at,
+                id: result?.msgid,
+                text: text,
+                created_at: Math.floor(Date.now() / 1000),
                 author_id: user.id,
                 author_name: 'Вы',
                 is_client: false
