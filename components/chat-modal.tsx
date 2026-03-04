@@ -259,10 +259,10 @@ export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModal
                 </div>
 
                 {/* Контент - занимает все свободное пространство с прокруткой */}
-                <div className="flex-1 overflow-hidden px-4">
-                    <Tabs value={activeTab} onValueChange={handleTabChange}>
+                <div className="flex-1 min-h-0 px-4">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full">
                         <TabsContent value="chat" className="h-full mt-2">
-                            <div className="h-full overflow-y-auto pr-2">
+                            <div className="h-full overflow-y-auto">
                                 {loading ? (
                                     <div className="flex items-center justify-center h-full">
                                         <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -286,7 +286,7 @@ export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModal
                                         <p className="text-sm mt-2">Напишите что-нибудь клиенту!</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 pb-4">
                                         {messages.map((msg) => (
                                             <div
                                                 key={msg.id}
@@ -318,7 +318,7 @@ export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModal
                         </TabsContent>
 
                         <TabsContent value="notes" className="h-full mt-2">
-                            <div className="h-full overflow-y-auto pr-2">
+                            <div className="h-full overflow-y-auto">
                                 {loadingNotes ? (
                                     <div className="flex items-center justify-center h-full">
                                         <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -330,7 +330,7 @@ export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModal
                                         <p className="text-sm mt-2">Добавьте первое примечание к сделке</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 pb-4">
                                         {notes.map((note) => (
                                             <div key={note.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                                 <div className="flex justify-between items-start mb-2">
