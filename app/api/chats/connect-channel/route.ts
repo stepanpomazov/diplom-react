@@ -4,38 +4,36 @@ import crypto from 'crypto';
 
 export async function POST() {
     try {
-        // 👇 ЭТИ ДАННЫЕ ВЫ ДОЛЖНЫ ПОЛУЧИТЬ ОТ ТЕХПОДДЕРЖКИ AMOCRM
-        const channelId = 'YOUR_CHANNEL_ID'; // Вставьте ваш ID канала
-        const channelSecret = 'YOUR_CHANNEL_SECRET'; // Вставьте ваш секрет
+        const channelId = process.env.AMOCRM_CHANNEL_ID!;
+        const channelSecret = process.env.AMOCRM_CHANNEL_SECRET!;
         const accountId = '32937090'; // Ваш ID аккаунта
 
         const method = 'POST';
         const contentType = 'application/json';
-        const date = new Date().toUTCString(); // Текущее время в формате RFC 2822
+        const date = new Date().toUTCString();
         const path = `/v2/origin/custom/${channelId}/connect`;
         const url = `https://amojo.amocrm.ru${path}`;
 
         // Тело запроса
         const body = {
             account_id: accountId,
-            title: 'Мой чат для сделок', // Название, которое увидит пользователь
+            title: 'Чат для сделок',
             hook_api_version: 'v2',
         };
         const requestBody = JSON.stringify(body);
 
-        // Вычисляем Content-MD5 (хэш от тела запроса)
+        // Вычисляем Content-MD5
         const checkSum = crypto.createHash('md5').update(requestBody).digest('hex').toLowerCase();
 
-        // Строка для подписи (ВАЖНО: именно в таком порядке!)
+        // Строка для подписи
         const stringToSign = [method, checkSum, contentType, date, path].join('\n');
 
-        // Вычисляем X-Signature (подпись)
+        // Вычисляем X-Signature
         const signature = crypto.createHmac('sha1', channelSecret)
             .update(stringToSign)
             .digest('hex')
             .toLowerCase();
 
-        // Формируем заголовки
         const headers = {
             'Date': date,
             'Content-Type': contentType,
@@ -43,9 +41,8 @@ export async function POST() {
             'X-Signature': signature,
         };
 
-        console.log('Подключаем канал к аккаунту...', { url, headers, body });
+        console.log('Connecting channel...', { url, headers, body });
 
-        // Выполняем запрос
         const response = await fetch(url, {
             method: 'POST',
             headers: headers,
@@ -55,14 +52,13 @@ export async function POST() {
         const data = await response.json();
 
         if (!response.ok) {
-            console.error('Ошибка подключения:', data);
+            console.error('Connection failed:', data);
             return NextResponse.json({ error: data }, { status: response.status });
         }
 
         // 🎉 УСПЕХ! Сохраняем scope_id
-        console.log('✅ Канал подключен! Scope ID:', data.scope_id);
+        console.log('✅ Channel connected! Scope ID:', data.scope_id);
 
-        // ВАЖНО: Скопируйте этот scope_id и сохраните его в .env
         return NextResponse.json({
             success: true,
             scope_id: data.scope_id,
@@ -70,7 +66,7 @@ export async function POST() {
         });
 
     } catch (error) {
-        console.error('Ошибка:', error);
+        console.error('Error:', error);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });
     }
 }
