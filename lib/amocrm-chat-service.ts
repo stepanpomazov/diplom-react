@@ -40,7 +40,7 @@ export class AmoCrmChatService {
     // СОЗДАТЬ НОВЫЙ ЧАТ для сделки
     async createChat(dealId: number, contactId: number, source: string = 'chat') {
         try {
-            console.log('[ChatService] Creating chat for deal:', dealId, 'contact:', contactId)
+            console.log('[ChatService] Creating chat - Request:', { dealId, contactId, source })
 
             const data = await this.request('/chats', {
                 method: 'POST',
@@ -56,10 +56,10 @@ export class AmoCrmChatService {
                 })
             })
 
-            console.log('[ChatService] Chat created:', data)
+            console.log('[ChatService] Create chat response:', data)
             return data
         } catch (error) {
-            console.error('Error creating chat:', error)
+            console.error('[ChatService] Error creating chat:', error)
             throw error
         }
     }
