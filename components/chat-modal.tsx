@@ -2,9 +2,11 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { X, Send, Loader2, User, Building } from "lucide-react"
+import { X, Send, Loader2, User, Building, FileText, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Message {
     id: string
@@ -13,6 +15,13 @@ interface Message {
     author_id: number
     author_name?: string
     is_client?: boolean
+}
+
+interface Note {
+    id: string
+    text: string
+    created_at: number
+    author_name: string
 }
 
 interface ChatModalProps {
@@ -26,38 +35,29 @@ interface ChatModalProps {
     isOpen: boolean
     onClose: () => void
     userId: number
+    userName: string
 }
 
-export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
+export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModalProps) {
     const [messages, setMessages] = useState<Message[]>([])
+    const [notes, setNotes] = useState<Note[]>([])
     const [newMessage, setNewMessage] = useState("")
+    const [newNote, setNewNote] = useState("")
     const [loading, setLoading] = useState(false)
+    const [loadingNotes, setLoadingNotes] = useState(false)
     const [sending, setSending] = useState(false)
+    const [sendingNote, setSendingNote] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [activeTab, setActiveTab] = useState<"chat" | "notes">("chat")
     const messagesEndRef = useRef<HTMLDivElement>(null)
-    const [userAmojoId, setUserAmojoId] = useState<string | null>(null)
-    useEffect(() => {
-        const fetchUserAmojoId = async () => {
-            try {
-                const response = await fetch('/api/debug/user-amojo-id')
-                const data = await response.json()
-                if (data.amojo_id) {
-                    setUserAmojoId(data.amojo_id)
-                }
-            } catch (error) {
-                console.error('Failed to fetch user amojo_id:', error)
-            }
-        }
-
-        fetchUserAmojoId()
-    }, [])
+    const notesEndRef = useRef<HTMLDivElement>(null)
 
     const loadMessages = useCallback(async () => {
         if (!deal) return
         setLoading(true)
         setError(null)
         try {
-            const response = await fetch(`/api/chats/${deal.id}`, {
+            const response = await fetch(`/api/chats/${deal.id}?type=chat`, {
                 credentials: 'include'
             })
             const data = await response.json()
@@ -67,7 +67,7 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
                 return
             }
 
-            setMessages(data.messages)
+            setMessages(data.messages || [])
         } catch (error) {
             console.error('Failed to load messages:', error)
             setError('Ошибка загрузки сообщений')
@@ -76,19 +76,44 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
         }
     }, [deal])
 
+    const loadNotes = useCallback(async () => {
+        if (!deal) return
+        setLoadingNotes(true)
+        setError(null)
+        try {
+            const response = await fetch(`/api/chats/${deal.id}?type=notes`, {
+                credentials: 'include'
+            })
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(data.error || 'Failed to load notes')
+                return
+            }
+
+            setNotes(data.notes || [])
+        } catch (error) {
+            console.error('Failed to load notes:', error)
+            setError('Ошибка загрузки примечаний')
+        } finally {
+            setLoadingNotes(false)
+        }
+    }, [deal])
+
     useEffect(() => {
         if (isOpen && deal) {
             loadMessages()
+            loadNotes()
         }
-    }, [isOpen, deal, loadMessages])
+    }, [isOpen, deal, loadMessages, loadNotes])
 
     useEffect(() => {
-        scrollToBottom()
-    }, [messages])
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-    }
+        if (activeTab === "chat") {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+        } else {
+            notesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+        }
+    }, [messages, notes, activeTab])
 
     const sendMessage = async () => {
         if (!newMessage.trim() || !deal) return
@@ -99,7 +124,11 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
             const response = await fetch(`/api/chats/${deal.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: newMessage }),
+                body: JSON.stringify({
+                    text: newMessage,
+                    type: 'chat',
+                    userId
+                }),
                 credentials: 'include'
             })
 
@@ -107,7 +136,6 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
 
             if (response.ok) {
                 setNewMessage("")
-                // Добавляем отправленное сообщение сразу в список
                 const newMsg: Message = {
                     id: data.message.id || Date.now().toString(),
                     text: newMessage,
@@ -128,11 +156,58 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
         }
     }
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const sendNote = async () => {
+        if (!newNote.trim() || !deal) return
+
+        setSendingNote(true)
+        setError(null)
+        try {
+            const response = await fetch(`/api/chats/${deal.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: newNote,
+                    type: 'notes',
+                    userId
+                }),
+                credentials: 'include'
+            })
+
+            const data = await response.json()
+
+            if (response.ok) {
+                setNewNote("")
+                const newNoteItem: Note = {
+                    id: data.note?.id || Date.now().toString(),
+                    text: newNote,
+                    created_at: Math.floor(Date.now() / 1000),
+                    author_name: userName
+                }
+                setNotes(prev => [...prev, newNoteItem])
+            } else {
+                setError(data.error || 'Failed to send note')
+            }
+        } catch (error) {
+            console.error('Failed to send note:', error)
+            setError('Ошибка отправки примечания')
+        } finally {
+            setSendingNote(false)
+        }
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
-            sendMessage()
+            if (activeTab === "chat") {
+                sendMessage()
+            } else {
+                sendNote()
+            }
         }
+    }
+
+    const handleTabChange = (value: string) => {
+        setActiveTab(value as "chat" | "notes")
     }
 
     if (!isOpen || !deal) return null
@@ -149,7 +224,6 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
                                 <div className="flex items-center gap-1">
                                     <User className="h-4 w-4" />
                                     {deal.contact_name}
-                                    {userAmojoId}
                                 </div>
                             )}
                             {deal.company_name && (
@@ -168,75 +242,153 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
                     </Button>
                 </div>
 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                        </div>
-                    ) : error ? (
-                        <div className="text-center text-red-500 mt-20">
-                            <p>{error}</p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={loadMessages}
-                                className="mt-4"
-                            >
-                                Повторить
-                            </Button>
-                        </div>
-                    ) : messages.length === 0 ? (
-                        <div className="text-center text-gray-500 mt-20">
-                            Нет сообщений. Напишите что-нибудь клиенту!
-                        </div>
-                    ) : (
-                        messages.map((msg) => (
-                            <div
-                                key={msg.id}
-                                className={`flex ${msg.author_id === userId ? 'justify-end' : 'justify-start'}`}
-                            >
-                                <div
-                                    className={`max-w-[70%] rounded-lg p-3 ${
-                                        msg.author_id === userId
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-gray-100 text-gray-900'
-                                    }`}
-                                >
-                                    {msg.author_id !== userId && (
-                                        <p className="text-xs font-medium mb-1 text-gray-600">
-                                            {msg.author_name || 'Клиент'}
-                                        </p>
-                                    )}
-                                    <p>{msg.text}</p>
-                                    <p className="text-xs mt-1 opacity-70">
-                                        {new Date(msg.created_at * 1000).toLocaleTimeString()}
-                                    </p>
-                                </div>
+                {/* Tabs */}
+                <Tabs value={activeTab} onValueChange={handleTabChange} className="px-4 pt-2">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="chat" className="flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Чат
+                        </TabsTrigger>
+                        <TabsTrigger value="notes" className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Примечания
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="chat" className="mt-4 h-[calc(100%-80px)] overflow-y-auto">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                             </div>
-                        ))
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
+                        ) : error ? (
+                            <div className="text-center text-red-500 mt-20">
+                                <p>{error}</p>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={loadMessages}
+                                    className="mt-4"
+                                >
+                                    Повторить
+                                </Button>
+                            </div>
+                        ) : messages.length === 0 ? (
+                            <div className="text-center text-gray-500 mt-20">
+                                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                                <p className="text-lg font-medium">Нет сообщений</p>
+                                <p className="text-sm mt-2">Напишите что-нибудь клиенту!</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {messages.map((msg) => (
+                                    <div
+                                        key={msg.id}
+                                        className={`flex ${msg.author_id === userId ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div
+                                            className={`max-w-[70%] rounded-lg p-3 ${
+                                                msg.author_id === userId
+                                                    ? 'bg-blue-500 text-white'
+                                                    : 'bg-gray-100 text-gray-900'
+                                            }`}
+                                        >
+                                            {msg.author_id !== userId && (
+                                                <p className="text-xs font-medium mb-1 text-gray-600">
+                                                    {msg.author_name || 'Клиент'}
+                                                </p>
+                                            )}
+                                            <p>{msg.text}</p>
+                                            <p className="text-xs mt-1 opacity-70">
+                                                {new Date(msg.created_at * 1000).toLocaleTimeString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="notes" className="mt-4 h-[calc(100%-80px)] overflow-y-auto">
+                        {loadingNotes ? (
+                            <div className="flex items-center justify-center h-full">
+                                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                            </div>
+                        ) : notes.length === 0 ? (
+                            <div className="text-center text-gray-500 mt-20">
+                                <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                                <p className="text-lg font-medium">Нет примечаний</p>
+                                <p className="text-sm mt-2">Добавьте первое примечание к сделке</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {notes.map((note) => (
+                                    <div key={note.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-sm font-medium text-gray-900">
+                                                {note.author_name}
+                                            </span>
+                                            <span className="text-xs text-gray-500">
+                                                {new Date(note.created_at * 1000).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-700 whitespace-pre-wrap">{note.text}</p>
+                                    </div>
+                                ))}
+                                <div ref={notesEndRef} />
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
 
                 {/* Input */}
                 <div className="p-4 border-t">
-                    <div className="flex gap-2">
-                        <Input
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Введите сообщение..."
-                            disabled={sending}
-                        />
-                        <Button onClick={sendMessage} disabled={sending || !newMessage.trim()}>
-                            {sending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Send className="h-4 w-4" />
-                            )}
-                        </Button>
-                    </div>
+                    {activeTab === "chat" ? (
+                        <div className="flex gap-2">
+                            <Input
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Введите сообщение..."
+                                disabled={sending}
+                            />
+                            <Button onClick={sendMessage} disabled={sending || !newMessage.trim()}>
+                                {sending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <Textarea
+                                value={newNote}
+                                onChange={(e) => setNewNote(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Текст примечания (Shift+Enter для новой строки)..."
+                                disabled={sendingNote}
+                                rows={3}
+                                className="resize-none"
+                            />
+                            <Button
+                                onClick={sendNote}
+                                disabled={sendingNote || !newNote.trim()}
+                                className="self-end"
+                            >
+                                {sendingNote ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <FileText className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                    {activeTab === "notes" && (
+                        <p className="text-xs text-gray-500 mt-2">
+                            ⚡ Примечание сразу появится в ленте сделки в amoCRM
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

@@ -32,11 +32,27 @@ interface ChatMessage {
     }
 }
 
+// Тип для примечания из CRM
+interface CrmNote {
+    id: number
+    text: string
+    created_at: number
+    created_by: string
+    entity_id: number
+    entity_type: string
+}
+
+// Тип для ответа API с примечаниями
+interface NotesResponse {
+    _embedded?: {
+        notes?: CrmNote[]
+    }
+}
+
 // Тип для нового сообщения из ответа API
 interface NewMessage {
     msgid: string
     conversation_id: string
-    // Другие поля могут быть, но они не важны для нас
 }
 
 // Тип для ответа при отправке сообщения
@@ -45,8 +61,101 @@ interface SendMessageResponse {
 }
 
 // Простое in-memory хранилище для conversation_id
-// В продакшене лучше использовать Redis или БД
 const conversationStore = new Map<number, string>();
+
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ dealId: string }> }
+) {
+    try {
+        const { searchParams } = new URL(request.url)
+        const type = searchParams.get('type') || 'chat'
+        const { dealId } = await params
+        const dealIdNum = parseInt(dealId)
+
+        console.log(`[CHAT API] GET - Fetching ${type} for deal:`, dealId)
+
+        const cookieStore = await cookies()
+        const userCookie = cookieStore.get('user')
+        if (!userCookie) {
+            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+        }
+
+        const user = JSON.parse(userCookie.value)
+        const amoCrmService = new AmoCrmService()
+
+        // Если запрашиваем примечания
+        if (type === 'notes') {
+            try {
+                console.log('[CHAT API] Fetching notes for deal:', dealIdNum)
+
+                // Используем публичный метод для запроса
+                const notesData = await amoCrmService.request<NotesResponse>(`/leads/${dealIdNum}/notes`)
+                const notes = notesData?._embedded?.notes || []
+
+                console.log(`[CHAT API] Found ${notes.length} notes`)
+
+                // Форматируем примечания
+                const formattedNotes = notes.map((note: CrmNote) => ({
+                    id: note.id.toString(),
+                    text: note.text,
+                    created_at: note.created_at,
+                    author_name: note.created_by || 'Система'
+                }))
+
+                return NextResponse.json({ notes: formattedNotes })
+
+            } catch (error) {
+                console.error('[CHAT API] Error fetching notes:', error)
+                return NextResponse.json(
+                    { error: 'Failed to fetch notes' },
+                    { status: 500 }
+                )
+            }
+        }
+        // Если запрашиваем чат
+        else {
+            try {
+                // Получаем сохраненный conversation_id
+                const savedConversationId = conversationStore.get(dealIdNum)
+                const conversationId = savedConversationId || `deal_${dealIdNum}`
+
+                console.log('[CHAT API] Getting messages for conversation:', conversationId)
+
+                const chatService = new AmoCrmChatService()
+                const messages = await chatService.getChatMessages(conversationId) as ChatMessage[]
+
+                console.log(`[CHAT API] Found ${messages.length} messages`)
+
+                // Обогащаем сообщения информацией об авторах
+                const enrichedMessages = messages.map((msg: ChatMessage) => ({
+                    id: msg.message.id,
+                    text: msg.message.text,
+                    created_at: msg.timestamp,
+                    author_id: msg.sender.id === `user_${user.id}` ? user.id : 0,
+                    author_name: msg.sender.id === `user_${user.id}` ? 'Вы' : (msg.sender.name || 'Клиент'),
+                    is_client: msg.sender.id !== `user_${user.id}`
+                }))
+
+                return NextResponse.json({ messages: enrichedMessages })
+
+            } catch (error) {
+                console.error('[CHAT API] Error fetching messages:', error)
+                return NextResponse.json(
+                    { error: 'Failed to fetch messages' },
+                    { status: 500 }
+                )
+            }
+        }
+
+    } catch (error) {
+        console.error('[CHAT API] Error:', error)
+        return NextResponse.json(
+            { error: 'Failed to fetch data' },
+            { status: 500 }
+        )
+    }
+}
 
 export async function POST(
     request: Request,
@@ -55,9 +164,10 @@ export async function POST(
     try {
         const { dealId } = await params
         const body = await request.json()
-        const { text } = body
+        const { text, type } = body
+        const dealIdNum = parseInt(dealId)
 
-        console.log('[CHAT API] POST - Sending message to deal:', dealId, 'Text:', text)
+        console.log(`[CHAT API] POST - Sending ${type} to deal:`, dealId, 'Text:', text)
 
         const cookieStore = await cookies()
         const userCookie = cookieStore.get('user')
@@ -67,133 +177,133 @@ export async function POST(
         }
 
         const user = JSON.parse(userCookie.value)
-        const dealIdNum = parseInt(dealId)
 
-        // Получаем amojo_id пользователя
-        const amoCrmService = new AmoCrmService()
-        const userAmojoId = await amoCrmService.getUserAmojoId(user.id)
+        // Если создаем примечание
+        if (type === 'notes') {
+            try {
+                console.log('[CHAT API] Creating note for deal:', dealIdNum)
 
-        if (!userAmojoId) {
-            console.error('[CHAT API] Could not get user amojo_id for user:', user.id)
-            return NextResponse.json(
-                { error: 'Could not get user amojo_id' },
-                { status: 500 }
-            )
-        }
-        console.log('[CHAT API] Got user amojo_id:', userAmojoId)
+                // Используем fetch напрямую для создания примечания
+                const response = await fetch(
+                    `https://${process.env.AMOCRM_SUBDOMAIN}.amocrm.ru/api/v4/leads/${dealIdNum}/notes`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${process.env.AMOCRM_ACCESS_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify([{
+                            entity_id: dealIdNum,
+                            note_type: "common",
+                            text: text,
+                            params: {}
+                        }])
+                    }
+                )
 
-        // Получаем информацию о сделке и контакте
-        const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContact[]
-        const currentDeal = deals.find((d: DealWithContact) => d.id === dealIdNum)
+                if (!response.ok) {
 
-        if (!currentDeal) {
-            return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
-        }
+                }
 
-        const contact = currentDeal._embedded?.contacts?.[0]
-        if (!contact) {
-            return NextResponse.json({ error: 'No contact found for this deal' }, { status: 400 })
-        }
+                console.log('[CHAT API] Note created successfully')
 
-        // Используем сохраненный conversation_id или создаем временный
-        const existingConversationId = conversationStore.get(dealIdNum);
-        const conversationId = existingConversationId || `deal_${dealIdNum}`;
-        console.log('[CHAT API] Using conversation_id:', conversationId);
+                return NextResponse.json({
+                    success: true,
+                    note: {
+                        id: Date.now().toString(),
+                        text: text,
+                        created_at: Math.floor(Date.now() / 1000)
+                    }
+                })
 
-        const chatService = new AmoCrmChatService()
-
-        // Отправляем сообщение
-        const result = await chatService.sendMessage(
-            conversationId,
-            text,
-            user.id,
-            user.name,
-            userAmojoId,
-            contact.id,
-            contact.name
-        ) as SendMessageResponse;
-
-        console.log('[CHAT API] Send message result:', JSON.stringify(result, null, 2))
-
-        // ВАЖНО: Сохраняем реальный conversation_id из ответа
-        if (result?.new_message?.conversation_id &&
-            result.new_message.conversation_id !== conversationId) {
-
-            const realConversationId = result.new_message.conversation_id;
-            conversationStore.set(dealIdNum, realConversationId);
-            console.log(`[CHAT API] Saved real conversation_id for deal ${dealIdNum}: ${realConversationId}`);
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: {
-                id: result?.new_message?.msgid,
-                text: text,
-                created_at: Math.floor(Date.now() / 1000),
-                author_id: user.id
+            } catch (error) {
+                console.error('[CHAT API] Error creating note:', error)
+                return NextResponse.json(
+                    { error: 'Failed to create note' },
+                    { status: 500 }
+                )
             }
-        })
+        }
+        // Если отправляем сообщение в чат
+        else {
+            try {
+                // Получаем amojo_id пользователя
+                const userAmojoId = await amoCrmService.getUserAmojoId(user.id)
 
-    } catch (error) {
-        console.error('[CHAT API] Error sending message:', error)
-        return NextResponse.json(
-            { error: 'Failed to send message' },
-            { status: 500 }
-        )
-    }
-}
+                if (!userAmojoId) {
+                    console.error('[CHAT API] Could not get user amojo_id for user:', user.id)
+                    return NextResponse.json(
+                        { error: 'Could not get user amojo_id' },
+                        { status: 500 }
+                    )
+                }
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ dealId: string }> }
-) {
-    try {
-        const { dealId } = await params
-        const dealIdNum = parseInt(dealId)
+                // Получаем информацию о сделке и контакте
+                const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContact[]
+                const currentDeal = deals.find((d: DealWithContact) => d.id === dealIdNum)
 
-        console.log('[CHAT API] GET - Fetching chat for deal:', dealId)
+                if (!currentDeal) {
+                    return NextResponse.json({ error: 'Deal not found' }, { status: 404 })
+                }
 
-        const cookieStore = await cookies()
-        const userCookie = cookieStore.get('user')
+                const contact = currentDeal._embedded?.contacts?.[0]
+                if (!contact) {
+                    return NextResponse.json({ error: 'No contact found for this deal' }, { status: 400 })
+                }
 
-        if (!userCookie) {
-            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+                // Используем сохраненный conversation_id или создаем временный
+                const existingConversationId = conversationStore.get(dealIdNum)
+                const conversationId = existingConversationId || `deal_${dealIdNum}`
+
+                console.log('[CHAT API] Using conversation_id:', conversationId)
+
+                const chatService = new AmoCrmChatService()
+
+                // Отправляем сообщение
+                const result = await chatService.sendMessage(
+                    conversationId,
+                    text,
+                    user.id,
+                    user.name,
+                    userAmojoId,
+                    contact.id,
+                    contact.name
+                ) as SendMessageResponse
+
+                console.log('[CHAT API] Send message result:', JSON.stringify(result, null, 2))
+
+                // Сохраняем реальный conversation_id из ответа
+                if (result?.new_message?.conversation_id &&
+                    result.new_message.conversation_id !== conversationId) {
+
+                    const realConversationId = result.new_message.conversation_id
+                    conversationStore.set(dealIdNum, realConversationId)
+                    console.log(`[CHAT API] Saved real conversation_id for deal ${dealIdNum}: ${realConversationId}`)
+                }
+
+                return NextResponse.json({
+                    success: true,
+                    message: {
+                        id: result?.new_message?.msgid,
+                        text: text,
+                        created_at: Math.floor(Date.now() / 1000),
+                        author_id: user.id
+                    }
+                })
+
+            } catch (error) {
+                console.error('[CHAT API] Error sending message:', error)
+                return NextResponse.json(
+                    { error: 'Failed to send message' },
+                    { status: 500 }
+                )
+            }
         }
 
-        const user = JSON.parse(userCookie.value)
-
-        // Получаем сохраненный conversation_id
-        const savedConversationId = conversationStore.get(dealIdNum);
-
-        console.log('[CHAT API] Retrieved conversation_id from store:', savedConversationId);
-
-        // Если нет сохраненного conversation_id, пробуем временный
-        const conversationId = savedConversationId || `deal_${dealIdNum}`;
-        console.log('[CHAT API] Using conversation_id:', conversationId);
-
-        const chatService = new AmoCrmChatService()
-
-        // Получаем сообщения чата
-        console.log('[CHAT API] Getting messages for conversation:', conversationId)
-        const messages = await chatService.getChatMessages(conversationId)
-        console.log(`[CHAT API] Found ${messages.length} messages`)
-
-        // Обогащаем сообщения информацией об авторах
-        const enrichedMessages = messages.map((msg: ChatMessage) => ({
-            id: msg.message.id,
-            text: msg.message.text,
-            created_at: msg.timestamp,
-            author_id: msg.sender.id === `user_${user.id}` ? user.id : 0,
-            author_name: msg.sender.id === `user_${user.id}` ? 'Вы' : (msg.sender.name || 'Клиент'),
-            is_client: msg.sender.id !== `user_${user.id}`
-        }))
-
-        return NextResponse.json({ messages: enrichedMessages })
-
     } catch (error) {
-        console.error('[CHAT API] Error fetching chat:', error)
+        console.error('[CHAT API] Error:', error)
         return NextResponse.json(
-            { error: 'Failed to fetch chat' },
+            { error: 'Failed to process request' },
             { status: 500 }
         )
     }

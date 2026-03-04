@@ -250,6 +250,7 @@ export function EmployeeDashboard() {
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
                 userId={user?.id || 0}
+                userName={user?.name || ''}  // ← Добавлено!
             />
         </div>
     )
