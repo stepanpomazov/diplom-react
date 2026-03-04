@@ -72,18 +72,18 @@ export async function GET(request: Request) {
         console.log('[CALLBACK] Setting user cookie:', user)
         console.log('[CALLBACK] Cookie params:', {
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production', // true на Vercel!
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
             maxAge: 60 * 60 * 24 * 7,
             path: '/'
         })
 
-        // ВАЖНО: для продакшена secure: true!
+        // Устанавливаем куку
         cookieStore.set('user', JSON.stringify(user), {
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production', // автоматически
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7, // 7 дней
+            maxAge: 60 * 60 * 24 * 7,
             path: '/'
         })
 
@@ -91,9 +91,7 @@ export async function GET(request: Request) {
         const savedUser = cookieStore.get('user')
         console.log('[CALLBACK] Cookie saved check:', {
             exists: !!savedUser,
-            value: savedUser ? savedUser.value.substring(0, 30) + '...' : 'null',
-            name: savedUser?.name,
-            path: savedUser?.path
+            value: savedUser ? savedUser.value.substring(0, 30) + '...' : 'null'
         })
 
         // Также проверим все куки
@@ -102,7 +100,7 @@ export async function GET(request: Request) {
 
         console.log('=== CALLBACK END, redirecting to /dashboard ===')
 
-        // Явно указываем baseUrl для редиректа
+        // Определяем baseUrl для редиректа
         const baseUrl = process.env.NODE_ENV === 'production'
             ? 'https://diplom-react-two.vercel.app'
             : 'http://localhost:3002'
