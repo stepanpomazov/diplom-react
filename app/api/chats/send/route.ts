@@ -37,7 +37,18 @@ export async function POST(request: Request) {
         const chatService = new AmoCrmChatService();
         const amoCrmService = new AmoCrmService();
 
-        // Получаем информацию о сделке и контакте
+        // 1. Получаем amojo_id пользователя
+        const userAmojoId = await amoCrmService.getUserAmojoId(user.id);
+        if (!userAmojoId) {
+            console.error('[CHAT SEND] Could not get user amojo_id for user:', user.id);
+            return NextResponse.json(
+                { error: 'Could not get user amojo_id' },
+                { status: 500 }
+            );
+        }
+        console.log('[CHAT SEND] Got user amojo_id:', userAmojoId);
+
+        // 2. Получаем информацию о сделке и контакте
         const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContacts[];
         const currentDeal = deals.find((d: DealWithContacts) => d.id === dealId);
 
@@ -50,15 +61,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No contact found for this deal' }, { status: 400 });
         }
 
-        // Создаем или получаем conversation_id
+        // 3. Создаем conversation_id
         const conversationId = `deal_${dealId}`;
 
-        // Отправляем сообщение
+        // 4. Отправляем сообщение со ВСЕМИ 7 аргументами
         const result = await chatService.sendMessage(
             conversationId,
             text,
             userId,
             user.name,
+            userAmojoId,  // ВАЖНО: передаем amojo_id!
             contact.id,
             contact.name
         );

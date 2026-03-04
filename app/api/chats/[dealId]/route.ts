@@ -98,8 +98,6 @@ export async function POST(
         const body = await request.json()
         const { text } = body
 
-        console.log('[CHAT API] Sending message to deal:', dealId, 'Text:', text)
-
         const cookieStore = await cookies()
         const userCookie = cookieStore.get('user')
 
@@ -110,15 +108,21 @@ export async function POST(
         const user = JSON.parse(userCookie.value)
         const dealIdNum = parseInt(dealId)
 
-        if (!text || !text.trim()) {
+        // Получаем информацию о контакте из сделки
+        const amoCrmService = new AmoCrmService()
+
+        // 1. Получаем amojo_id пользователя АВТОМАТИЧЕСКИ!
+        const userAmojoId = await amoCrmService.getUserAmojoId(user.id)
+
+        if (!userAmojoId) {
+            console.error('[CHAT API] Could not get user amojo_id for user:', user.id)
             return NextResponse.json(
-                { error: 'Message text is required' },
-                { status: 400 }
+                { error: 'Could not get user amojo_id' },
+                { status: 500 }
             )
         }
 
-        // Получаем информацию о контакте из сделки
-        const amoCrmService = new AmoCrmService()
+        // 2. Получаем сделку и контакт
         const deals = await amoCrmService.getUserDealsWithContacts(user.id) as DealWithContact[]
         const currentDeal = deals.find((d: DealWithContact) => d.id === dealIdNum)
 
@@ -134,17 +138,16 @@ export async function POST(
         const conversationId = `deal_${dealIdNum}`
         const chatService = new AmoCrmChatService()
 
-        // Отправляем сообщение через основной метод sendMessage
+        // 3. Отправляем сообщение с автоматически полученным amojo_id
         const result = await chatService.sendMessage(
             conversationId,
             text,
             user.id,
             user.name,
+            userAmojoId,  // Передаем полученный amojo_id!
             contact.id,
             contact.name
         )
-
-        console.log('[CHAT API] Message sent successfully')
 
         return NextResponse.json({
             success: true,

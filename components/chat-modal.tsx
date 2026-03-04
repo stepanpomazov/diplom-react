@@ -35,6 +35,22 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
     const [sending, setSending] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const [userAmojoId, setUserAmojoId] = useState<string | null>(null)
+    useEffect(() => {
+        const fetchUserAmojoId = async () => {
+            try {
+                const response = await fetch('/api/debug/user-amojo-id')
+                const data = await response.json()
+                if (data.amojo_id) {
+                    setUserAmojoId(data.amojo_id)
+                }
+            } catch (error) {
+                console.error('Failed to fetch user amojo_id:', error)
+            }
+        }
+
+        fetchUserAmojoId()
+    }, [])
 
     const loadMessages = useCallback(async () => {
         if (!deal) return
@@ -133,6 +149,7 @@ export function ChatModal({ deal, isOpen, onClose, userId }: ChatModalProps) {
                                 <div className="flex items-center gap-1">
                                     <User className="h-4 w-4" />
                                     {deal.contact_name}
+                                    {userAmojoId}
                                 </div>
                             )}
                             {deal.company_name && (

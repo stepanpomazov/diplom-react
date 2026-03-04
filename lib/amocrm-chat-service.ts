@@ -98,9 +98,10 @@ export class AmoCrmChatService {
     }
 
     // Отправить сообщение
-    async sendMessage(conversationId: string, text: string, userId: number, userName: string, contactId: number, contactName: string) {
+    async sendMessage(conversationId: string, text: string, userId: number, userName: string, userAmojoId: string, contactId: number, contactName: string) {
         try {
             console.log('[ChatService] Sending message to conversation:', conversationId)
+            console.log('[ChatService] Using user amojo_id:', userAmojoId)
 
             const payload = {
                 event_type: 'new_message',
@@ -110,9 +111,9 @@ export class AmoCrmChatService {
                     msgid: `msg_${Date.now()}_${Math.random()}`,
                     conversation_id: conversationId,
                     sender: {
-                        id: `user_${userId}`,
+                        id: `user_${userId}`, // ID на стороне интеграции
                         name: userName,
-                        ref_id: userId.toString()
+                        ref_id: userAmojoId // ВАЖНО: amojo_id пользователя!
                     },
                     receiver: {
                         id: `contact_${contactId}`,

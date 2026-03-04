@@ -51,6 +51,10 @@ interface AmoCrmUser {
     }
 }
 
+interface AmoCrmUserWithAmojoId extends AmoCrmUser {
+    amojo_id?: string
+}
+
 interface AmoCrmAccount {
     id: number
     name: string
@@ -75,6 +79,13 @@ interface LogData {
     status: number
     hasData: boolean
     count: number
+}
+
+// Вспомогательный тип для проверки наличия _embedded
+type WithEmbedded<T> = T & {
+    _embedded?: {
+        leads?: unknown[]
+    }
 }
 
 export class AmoCrmService {
@@ -105,17 +116,38 @@ export class AmoCrmService {
             throw new Error(`AmoCRM API error: ${response.status} - ${error.detail || response.statusText}`)
         }
 
-        const data = await response.json() as T & ApiResponse<AmoCrmDeal>
+        const data = await response.json() as T
 
-        // Безопасное логирование
+        // Безопасное логирование с проверкой структуры через приведение типа
+        const dataWithEmbedded = data as WithEmbedded<T>
         const logData: LogData = {
             status: response.status,
-            hasData: !!data?._embedded, // Временно оставляем, но можно заменить
-            count: data?._embedded?.leads?.length || 0 // Временно оставляем
+            hasData: !!dataWithEmbedded._embedded,
+            count: dataWithEmbedded._embedded?.leads?.length || 0
         }
         console.log(`[AmoCRM] Response for ${endpoint}:`, logData)
 
-        return data as T
+        return data
+    }
+
+    async getUserAmojoId(userId: number): Promise<string | null> {
+        try {
+            console.log('[AmoCRM] Getting amojo_id for user:', userId);
+
+            // Запрашиваем пользователя с amojo_id с правильной типизацией
+            const data = await this.request<AmoCrmUserWithAmojoId>(`/users/${userId}?with=amojo_id`);
+
+            console.log('[AmoCRM] User amojo_id:', data.amojo_id);
+            return data.amojo_id || null;
+
+        } catch (error) {
+            console.error('Error getting user amojo_id:', error);
+            return null;
+        }
+    }
+
+    async getCurrentUserAmojoId(userId: number): Promise<string | null> {
+        return this.getUserAmojoId(userId);
     }
 
     // ПОЛУЧАЕМ РЕАЛЬНОГО ПОЛЬЗОВАТЕЛЯ
@@ -163,7 +195,6 @@ export class AmoCrmService {
     }
 
     // ПОЛУЧАЕМ СПИСОК ПОЛЬЗОВАТЕЛЕЙ (для отладки)
-    // lib/amocrm-service.ts
     async getUsers(): Promise<AmoCrmUser[]> {
         try {
             const data = await this.request<ApiResponse<AmoCrmUser>>('/users')
@@ -274,5 +305,4 @@ export class AmoCrmService {
             return []
         }
     }
-
 }
