@@ -16,7 +16,7 @@ export interface User {
 
 interface AuthContextType {
     user: User | null
-    login: () => void  // БЕЗ аргументов!
+    login: (email: string, password: string) => Promise<boolean>
     logout: () => Promise<void>
     isLoading: boolean
     isAuthenticated: boolean
@@ -30,40 +30,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter()
 
     useEffect(() => {
-        console.log('AuthProvider - checking session...')
         checkSession()
     }, [])
 
     const checkSession = async () => {
         try {
-            console.log('Fetching /api/auth/session...')
-            const response = await fetch('/api/auth/session')
-            const data = await response.json()
-            console.log('Session response:', data)
-
-            if (response.ok && data.user) {
-                console.log('User found in session:', data.user)
+            const response = await fetch('/api/auth/session', {
+                credentials: 'include'
+            })
+            if (response.ok) {
+                const data = await response.json()
                 setUser(data.user)
-            } else {
-                console.log('No user in session')
             }
         } catch (error) {
             console.error('Session check failed:', error)
         } finally {
-            console.log('Session check complete, isLoading=false')
             setIsLoading(false)
         }
     }
 
-    const login = () => {
-        // Редирект на инициацию OAuth
-        window.location.href = '/api/auth/init'
+    const login = async (email: string, password: string): Promise<boolean> => {
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+                credentials: 'include'
+            })
+
+            const data = await response.json()
+
+            if (response.ok && data.success) {
+                setUser(data.user)
+                return true
+            }
+            return false
+        } catch (error) {
+            console.error('Login error:', error)
+            return false
+        }
     }
 
     const logout = async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST' })
+            // Вызываем API для очистки кук на сервере
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include'
+            })
+
+            // Очищаем состояние на клиенте
             setUser(null)
+
+            // Редирект на логин
             router.push('/login')
         } catch (error) {
             console.error('Logout error:', error)

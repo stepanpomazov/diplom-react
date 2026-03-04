@@ -29,18 +29,13 @@ export function LoginForm() {
         setIsLoading(true)
 
         try {
-            const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            })
+            // Используем login с email и password
+            const success = await login(email, password)
 
-            const data = await response.json()
-
-            if (response.ok && data.success) {
-                login() // Редирект на OAuth
+            if (success) {
+                router.push('/')
             } else {
-                setError(data.error || "Неверный email или пароль")
+                setError("Неверный email или пароль")
                 setIsLoading(false)
             }
         } catch (err) {
@@ -50,7 +45,8 @@ export function LoginForm() {
     }
 
     const handleAmoLogin = () => {
-        login() // Вызовет редирект на /api/auth/init
+        // Для OAuth входа через amoCRM используем отдельный редирект
+        window.location.href = '/api/auth/init'
     }
 
     // ВРЕМЕННО: Прямой демо-вход для разработки
