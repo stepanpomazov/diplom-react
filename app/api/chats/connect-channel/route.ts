@@ -7,8 +7,8 @@ export async function POST() {
         const channelId = process.env.AMOCRM_CHANNEL_ID;
         const channelSecret = process.env.AMOCRM_CHANNEL_SECRET;
 
-        // ВАЖНО: Используем code из ответа!
-        const accountId = 'amo.ext.32937090';
+        // ВАЖНО: Используем полученный amojo_id!
+        const accountId = 'ef3cde97-d03c-4b92-b3c6-f15c79c81628';
 
         if (!channelId || !channelSecret) {
             return NextResponse.json(
@@ -23,7 +23,7 @@ export async function POST() {
         const path = `/v2/origin/custom/${channelId}/connect`;
         const url = `https://amojo.amocrm.ru${path}`;
 
-        // Тело запроса - используем code!
+        // Тело запроса - используем правильный amojo_id!
         const body = {
             account_id: accountId,
             title: 'Чат для сделок',
@@ -50,7 +50,7 @@ export async function POST() {
             'X-Signature': signature,
         };
 
-        console.log('Connecting channel...', { url, accountId });
+        console.log('Connecting channel with amojo_id:', accountId);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -65,12 +65,13 @@ export async function POST() {
             return NextResponse.json({ error: data }, { status: response.status });
         }
 
-        // 🎉 УСПЕХ!
+        // 🎉 УСПЕХ! Сохраняем scope_id в переменные окружения
         console.log('✅ Channel connected! Scope ID:', data.scope_id);
 
         return NextResponse.json({
             success: true,
             scope_id: data.scope_id,
+            amojo_id: accountId,
             message: 'Сохраните этот scope_id в переменную AMOCRM_SCOPE_ID'
         });
 
