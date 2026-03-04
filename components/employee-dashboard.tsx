@@ -10,6 +10,7 @@ import {
     Target,
     Calendar,
 } from "lucide-react"
+import {ChatModal} from "@/components/chat-modal";
 
 // Типы для данных
 interface Deal {
@@ -56,6 +57,8 @@ export function EmployeeDashboard() {
     const { user } = useAuth()
     const [data, setData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
+    const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
+    const [isChatOpen, setIsChatOpen] = useState(false)
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -92,6 +95,10 @@ export function EmployeeDashboard() {
 
     const { stats, recentDeals } = data
 
+    const openChat = (deal: Deal) => {
+        setSelectedDeal(deal)
+        setIsChatOpen(true)
+    }
     return (
         <div className="p-6 max-w-7xl mx-auto">
             {/* Приветствие */}
@@ -198,7 +205,11 @@ export function EmployeeDashboard() {
                             const companyName = deal._embedded?.companies?.[0]?.name || ''
 
                             return (
-                                <div key={deal.id} className="px-6 py-4 hover:bg-gray-50">
+                                <div
+                                    key={deal.id}
+                                    onClick={() => openChat(deal)}
+                                    className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                                >
                                     <div className="flex justify-between items-start">
                                         <div className="flex-1">
                                             <h3 className="font-medium text-gray-900">{deal.name}</h3>
@@ -228,6 +239,18 @@ export function EmployeeDashboard() {
                     </div>
                 </div>
             )}
+            <ChatModal
+                deal={selectedDeal ? {
+                    id: selectedDeal.id,
+                    name: selectedDeal.name,
+                    price: selectedDeal.price,
+                    contact_name: selectedDeal._embedded?.contacts?.[0]?.name,
+                    company_name: selectedDeal._embedded?.companies?.[0]?.name
+                } : null}
+                isOpen={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                userId={user?.id || 0}
+            />
         </div>
     )
 }
