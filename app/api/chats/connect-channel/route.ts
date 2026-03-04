@@ -6,7 +6,7 @@ export async function POST() {
     try {
         const channelId = process.env.AMOCRM_CHANNEL_ID;
         const channelSecret = process.env.AMOCRM_CHANNEL_SECRET;
-        const accountId = '32937090'; // Ваш ID аккаунта
+        const accountId = 'amo.ext.32937090'; // Ваш ID аккаунта
 
         // Проверяем наличие переменных
         if (!channelId || !channelSecret) {
