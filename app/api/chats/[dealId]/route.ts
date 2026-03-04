@@ -208,6 +208,7 @@ export async function POST(
                         },
                         body: JSON.stringify([{
                             entity_id: dealIdNum,
+                            entity_type: 'leads',
                             note_type: "common",
                             text: text,
                             params: {}
