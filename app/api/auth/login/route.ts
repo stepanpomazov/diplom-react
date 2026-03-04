@@ -1,47 +1,42 @@
 // app/api/auth/login/route.ts
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import {AmoCrmService} from "@/lib/amocrm-service";
+import {NextResponse} from "next/server";
 
 export async function POST(request: Request) {
     try {
         const { email } = await request.json()
-        console.log('[LOGIN] Attempt for email:', email)
 
-        const cookieStore = await cookies()
+        const amoCrmService = new AmoCrmService()
 
-        // ВРЕМЕННО: Используем правильный ID пользователя 13574874
-        // Неважно, что вернёт getCurrentUser() - мы его игнорируем
+        // ПОЛУЧАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+        const allUsers = await amoCrmService.getUsers()
+        console.log('All users:', allUsers)
 
-        // Создаём пользователя с правильным ID
-        const userData = {
-            id: 13574874,                 // ВАШ ПРАВИЛЬНЫЙ ID
-            name: "test dev",              // Ваше имя из amoCRM
-            email: "stpomazov@mail.ru",    // Ваш email
-            role: "admin"                   // У вас права админа
+        // ИЩЕМ ПОЛЬЗОВАТЕЛЯ С ВАШИМ EMAIL
+        const currentUser = allUsers.find(u => u.email === email)
+
+        if (currentUser) {
+            // ВАЖНО: сохраняем ID пользователя (13574874), а не ID аккаунта!
+            const userData = {
+                id: currentUser.id,      // 13574874
+                name: currentUser.name,   // "test dev"
+                email: currentUser.email, // "stpomazov@mail.ru"
+                role: 'admin'             // у вас есть права админа
+            }
+
+            cookieStore.set('user', JSON.stringify(userData))
+            return NextResponse.json({ success: true, user: userData })
         }
 
-        console.log('[LOGIN] Setting user cookie with data:', userData)
-
-        // Сохраняем в куку
-        cookieStore.set({
-            name: 'user',
-            value: JSON.stringify(userData),
-            httpOnly: false,
-            secure: true,
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7,
-            path: '/'
-        })
-
-        return NextResponse.json({
-            success: true,
-            user: userData
-        })
+        return NextResponse.json(
+            { success: false, error: 'Пользователь не найден' },
+            { status: 401 }
+        )
 
     } catch (error) {
-        console.error('[LOGIN] Error:', error)
+        console.error('Login error:', error)
         return NextResponse.json(
-            { success: false, error: 'Внутренняя ошибка сервера' },
+            { success: false, error: 'Ошибка входа' },
             { status: 500 }
         )
     }
