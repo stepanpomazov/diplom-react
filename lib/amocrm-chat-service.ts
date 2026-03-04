@@ -2,13 +2,18 @@
 export class AmoCrmChatService {
     private accessToken: string
     private subdomain: string
+    private scopeId: string
 
     constructor() {
         this.accessToken = process.env.AMOCRM_ACCESS_TOKEN!
         this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'stpomazov'
+        this.scopeId = process.env.AMOCRM_SCOPE_ID!
+
+        if (!this.scopeId) {
+            console.error('AMOCRM_SCOPE_ID is not set!');
+        }
     }
 
-    // Используем AJAX endpoints для чатов
     private async ajaxRequest(endpoint: string, options: RequestInit = {}) {
         const url = `https://${this.subdomain}.amocrm.ru/ajax${endpoint}`
         console.log('[ChatService] Requesting:', url)
@@ -37,7 +42,7 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Getting chat for deal:', dealId)
             const data = await this.ajaxRequest(
-                `/chat/list?entity_type=leads&entity_id=${dealId}`
+                `/chat/list?entity_type=leads&entity_id=${dealId}&scope_id=${this.scopeId}`
             )
             console.log('[ChatService] Chat list response:', data)
             return data?.response?.items || []
@@ -58,7 +63,8 @@ export class AmoCrmChatService {
                     entity_type: 'leads',
                     entity_id: dealId,
                     contact_id: contactId,
-                    source: 'chat'
+                    source: 'chat',
+                    scope_id: this.scopeId // ВАЖНО: добавляем scope_id!
                 })
             })
 
@@ -74,7 +80,9 @@ export class AmoCrmChatService {
     async getChatMessages(chatId: string) {
         try {
             console.log('[ChatService] Getting messages for chat:', chatId)
-            const data = await this.ajaxRequest(`/chat/messages?chat_id=${chatId}&limit=50`)
+            const data = await this.ajaxRequest(
+                `/chat/messages?chat_id=${chatId}&scope_id=${this.scopeId}&limit=50`
+            )
             return data?.response?.messages || []
         } catch (error) {
             console.error('Error getting messages:', error)
@@ -91,7 +99,8 @@ export class AmoCrmChatService {
                 body: JSON.stringify({
                     chat_id: chatId,
                     message: text,
-                    author_id: userId
+                    author_id: userId,
+                    scope_id: this.scopeId // ВАЖНО: добавляем scope_id!
                 })
             })
             return data?.response
