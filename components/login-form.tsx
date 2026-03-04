@@ -50,7 +50,7 @@ export function LoginForm() {
     }
 
     const handleAmoLogin = () => {
-        //login()
+        login() // Вызовет редирект на /api/auth/init
     }
 
     // ВРЕМЕННО: Прямой демо-вход для разработки

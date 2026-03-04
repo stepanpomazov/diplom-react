@@ -1,4 +1,4 @@
-// app/api/auth/callback/route.ts - упрощенная версия для отладки
+// app/api/auth/callback/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
@@ -6,15 +6,25 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const code = searchParams.get('code')
+        const state = searchParams.get('state')
 
-        console.log('Callback received, code exists:', !!code)
+        console.log('=== CALLBACK START ===')
+        console.log('Code exists:', !!code)
+        console.log('State exists:', !!state)
+        console.log('Full URL:', request.url)
+        console.log('Environment:', process.env.NODE_ENV)
+        console.log('Redirect URI from env:', process.env.AMOCRM_REDIRECT_URI)
 
         if (!code) {
+            console.error('No code received')
             return NextResponse.redirect(new URL('/login?error=no_code', request.url))
         }
 
         const cookieStore = await cookies()
         const subdomain = process.env.AMOCRM_SUBDOMAIN || 'stpomazov'
+
+        console.log('Exchanging code for tokens...')
+        console.log('Token URL:', `https://${subdomain}.amocrm.ru/oauth2/access_token`)
 
         // Обмениваем код на токены
         const tokenResponse = await fetch(`https://${subdomain}.amocrm.ru/oauth2/access_token`, {
@@ -30,11 +40,15 @@ export async function GET(request: Request) {
         })
 
         const tokens = await tokenResponse.json()
+        console.log('Token response status:', tokenResponse.status)
+        console.log('Token response ok:', tokenResponse.ok)
 
         if (!tokenResponse.ok) {
             console.error('Token exchange failed:', tokens)
             return NextResponse.redirect(new URL('/login?error=token_failed', request.url))
         }
+
+        console.log('Tokens received successfully, getting user data...')
 
         // Получаем данные пользователя
         const userResponse = await fetch(`https://${subdomain}.amocrm.ru/api/v4/account`, {
@@ -45,6 +59,7 @@ export async function GET(request: Request) {
         })
 
         const accountData = await userResponse.json()
+        console.log('Account data received:', accountData ? 'YES' : 'NO')
 
         // Сохраняем пользователя
         const user = {
@@ -55,22 +70,50 @@ export async function GET(request: Request) {
         }
 
         console.log('[CALLBACK] Setting user cookie:', user)
-
-        cookieStore.set('user', JSON.stringify(user), {
+        console.log('[CALLBACK] Cookie params:', {
             httpOnly: false,
-            secure: false,
+            secure: process.env.NODE_ENV === 'production', // true на Vercel!
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7 // 7 дней
+            maxAge: 60 * 60 * 24 * 7,
+            path: '/'
         })
 
-// Проверим, что сохранилось
-        const savedUser = cookieStore.get('user')?.value
-        console.log('[CALLBACK] Cookie saved:', !!savedUser)
+        // ВАЖНО: для продакшена secure: true!
+        cookieStore.set('user', JSON.stringify(user), {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production', // автоматически
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 7, // 7 дней
+            path: '/'
+        })
 
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        // Проверяем, что кука сохранилась
+        const savedUser = cookieStore.get('user')
+        console.log('[CALLBACK] Cookie saved check:', {
+            exists: !!savedUser,
+            value: savedUser ? savedUser.value.substring(0, 30) + '...' : 'null',
+            name: savedUser?.name,
+            path: savedUser?.path
+        })
+
+        // Также проверим все куки
+        const allCookies = cookieStore.getAll()
+        console.log('[CALLBACK] All cookies after set:', allCookies.map(c => c.name))
+
+        console.log('=== CALLBACK END, redirecting to /dashboard ===')
+
+        // Явно указываем baseUrl для редиректа
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? 'https://diplom-react-two.vercel.app'
+            : 'http://localhost:3002'
+
+        return NextResponse.redirect(new URL('/dashboard', baseUrl))
 
     } catch (error) {
         console.error('Auth callback error:', error)
-        return NextResponse.redirect(new URL('/login?error=auth_failed', request.url))
+        const baseUrl = process.env.NODE_ENV === 'production'
+            ? 'https://diplom-react-two.vercel.app'
+            : 'http://localhost:3002'
+        return NextResponse.redirect(new URL('/login?error=auth_failed', baseUrl))
     }
 }
