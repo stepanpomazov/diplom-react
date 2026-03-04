@@ -3,22 +3,27 @@ export class AmoCrmChatService {
     private accessToken: string
     private subdomain: string
     private scopeId: string
+    private channelId: string
 
     constructor() {
         this.accessToken = process.env.AMOCRM_ACCESS_TOKEN!
         this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'stpomazov'
-        this.scopeId = process.env.AMOCRM_SCOPE_ID!
+        this.scopeId = process.env.AMOCRM_SCOPE_ID! // Полный scope_id
+
+        // Извлекаем channel_id из scope_id (часть до подчеркивания)
+        this.channelId = this.scopeId.split('_')[0]
 
         if (!this.scopeId) {
             console.error('AMOCRM_SCOPE_ID is not set!');
         }
     }
 
-    // Используем amojo.amocrm.ru для всех запросов к чатам!
     private async ajaxRequest(endpoint: string, options: RequestInit = {}) {
-        // ВАЖНО: Используем amojo.amocrm.ru, а не поддомен!
+        // Всегда используем amojo.amocrm.ru
         const url = `https://amojo.amocrm.ru${endpoint}`
         console.log('[ChatService] Requesting:', url)
+        console.log('[ChatService] Method:', options.method || 'GET')
+        console.log('[ChatService] Body:', options.body)
 
         const response = await fetch(url, {
             ...options,
@@ -43,8 +48,9 @@ export class AmoCrmChatService {
     async getDealChat(dealId: number) {
         try {
             console.log('[ChatService] Getting chat for deal:', dealId)
+            // Используем полный scope_id в query параметрах
             const data = await this.ajaxRequest(
-                `/v2/origin/custom/${this.scopeId.split('_')[0]}/chats?entity_type=leads&entity_id=${dealId}`
+                `/v2/origin/custom/${this.channelId}/chats?scope_id=${this.scopeId}&entity_type=leads&entity_id=${dealId}`
             )
             console.log('[ChatService] Chat list response:', data)
             return data?.response?.items || []
@@ -59,14 +65,13 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Creating chat for deal:', dealId, 'contact:', contactId)
 
-            const data = await this.ajaxRequest(`/v2/origin/custom/${this.scopeId.split('_')[0]}/chats`, {
+            const data = await this.ajaxRequest(`/v2/origin/custom/${this.channelId}/chats?scope_id=${this.scopeId}`, {
                 method: 'POST',
                 body: JSON.stringify({
                     entity_type: 'leads',
                     entity_id: dealId,
                     contact_id: contactId,
                     source: 'chat',
-                    scope_id: this.scopeId
                 })
             })
 
@@ -83,7 +88,7 @@ export class AmoCrmChatService {
         try {
             console.log('[ChatService] Getting messages for chat:', chatId)
             const data = await this.ajaxRequest(
-                `/v2/origin/custom/${this.scopeId.split('_')[0]}/chats/${chatId}/messages?limit=50`
+                `/v2/origin/custom/${this.channelId}/chats/${chatId}/messages?scope_id=${this.scopeId}&limit=50`
             )
             return data?.response?.messages || []
         } catch (error) {
@@ -96,14 +101,13 @@ export class AmoCrmChatService {
     async sendMessageAsUser(chatId: string, text: string, userId: number) {
         try {
             console.log('[ChatService] Sending message to chat:', chatId)
-            const data = await this.ajaxRequest(`/v2/origin/custom/${this.scopeId.split('_')[0]}/chats/${chatId}/messages`, {
+            const data = await this.ajaxRequest(`/v2/origin/custom/${this.channelId}/chats/${chatId}/messages?scope_id=${this.scopeId}`, {
                 method: 'POST',
                 body: JSON.stringify({
                     message: {
                         text: text,
                         author_id: userId
-                    },
-                    scope_id: this.scopeId
+                    }
                 })
             })
             return data?.response
