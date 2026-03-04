@@ -215,8 +215,10 @@ export async function POST(
                             entity_id: dealIdNum,
                             entity_type: 'leads',
                             note_type: "common",
-                            text: text,
-                            params: {}
+                            // ВАЖНО: текст должен быть в params.text, а не в text
+                            params: {
+                                text: text
+                            }
                         }])
                     }
                 );
