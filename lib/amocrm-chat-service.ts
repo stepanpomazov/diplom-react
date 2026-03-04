@@ -8,19 +8,25 @@ export class AmoCrmChatService {
         this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'stpomazov'
     }
 
-    private async request(endpoint: string, options: RequestInit = {}) {
-        const response = await fetch(`https://${this.subdomain}.amocrm.ru/api/v4${endpoint}`, {
+    // Используем AJAX endpoints для чатов
+    private async ajaxRequest(endpoint: string, options: RequestInit = {}) {
+        const url = `https://${this.subdomain}.amocrm.ru/ajax${endpoint}`
+        console.log('[ChatService] Requesting:', url)
+
+        const response = await fetch(url, {
             ...options,
             headers: {
                 'Authorization': `Bearer ${this.accessToken}`,
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
                 ...options.headers
             }
         })
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({}))
-            throw new Error(`AmoCRM API error: ${response.status} - ${error.detail || response.statusText}`)
+            const text = await response.text()
+            console.error('[ChatService] Error response:', text)
+            throw new Error(`AmoCRM API error: ${response.status} - ${text}`)
         }
 
         return response.json()
@@ -29,8 +35,12 @@ export class AmoCrmChatService {
     // Получить чат по сделке
     async getDealChat(dealId: number) {
         try {
-            const data = await this.request(`/chats?filter[entity_id]=${dealId}&filter[entity_type]=leads`)
-            return data._embedded?.chats || []
+            console.log('[ChatService] Getting chat for deal:', dealId)
+            const data = await this.ajaxRequest(
+                `/chat/list?entity_type=leads&entity_id=${dealId}`
+            )
+            console.log('[ChatService] Chat list response:', data)
+            return data?.response?.items || []
         } catch (error) {
             console.error('Error getting chat:', error)
             return []
@@ -38,28 +48,24 @@ export class AmoCrmChatService {
     }
 
     // СОЗДАТЬ НОВЫЙ ЧАТ для сделки
-    async createChat(dealId: number, contactId: number, source: string = 'chat') {
+    async createChat(dealId: number, contactId: number) {
         try {
-            console.log('[ChatService] Creating chat - Request:', { dealId, contactId, source })
+            console.log('[ChatService] Creating chat for deal:', dealId, 'contact:', contactId)
 
-            const data = await this.request('/chats', {
+            const data = await this.ajaxRequest('/chat/create', {
                 method: 'POST',
                 body: JSON.stringify({
-                    chat: {
-                        entity_id: dealId,
-                        entity_type: 'leads',
-                        source: source
-                    },
-                    contact: {
-                        id: contactId
-                    }
+                    entity_type: 'leads',
+                    entity_id: dealId,
+                    contact_id: contactId,
+                    source: 'chat'
                 })
             })
 
             console.log('[ChatService] Create chat response:', data)
-            return data
+            return data?.response
         } catch (error) {
-            console.error('[ChatService] Error creating chat:', error)
+            console.error('Error creating chat:', error)
             throw error
         }
     }
@@ -67,8 +73,9 @@ export class AmoCrmChatService {
     // Получить сообщения чата
     async getChatMessages(chatId: string) {
         try {
-            const data = await this.request(`/chats/${chatId}/messages?limit=50`)
-            return data._embedded?.messages || []
+            console.log('[ChatService] Getting messages for chat:', chatId)
+            const data = await this.ajaxRequest(`/chat/messages?chat_id=${chatId}&limit=50`)
+            return data?.response?.messages || []
         } catch (error) {
             console.error('Error getting messages:', error)
             return []
@@ -78,18 +85,16 @@ export class AmoCrmChatService {
     // Отправить сообщение
     async sendMessageAsUser(chatId: string, text: string, userId: number) {
         try {
-            return await this.request(`/chats/${chatId}/messages`, {
+            console.log('[ChatService] Sending message to chat:', chatId)
+            const data = await this.ajaxRequest('/chat/send', {
                 method: 'POST',
                 body: JSON.stringify({
-                    message: {
-                        text: text,
-                        author: {
-                            id: userId,
-                            type: 'user'
-                        }
-                    }
+                    chat_id: chatId,
+                    message: text,
+                    author_id: userId
                 })
             })
+            return data?.response
         } catch (error) {
             console.error('Error sending message:', error)
             throw error
