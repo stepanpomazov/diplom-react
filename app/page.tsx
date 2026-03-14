@@ -24,7 +24,7 @@ function AppContent() {
   return (
       <div className="min-h-screen bg-background">
         <DashboardHeader />
-        {user.role === "admin" ? <AdminDashboard /> : <EmployeeDashboard />}
+        {user.role === "employee" ? <AdminDashboard /> : <EmployeeDashboard />}
       </div>
   )
 }
