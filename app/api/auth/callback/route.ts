@@ -89,6 +89,14 @@ export async function GET(request: Request) {
             role: userData.rights?.is_admin ? 'admin' : 'employee'
         }
 
+        console.log('[CALLBACK] Saving user to cookie:', user)
+        console.log('[CALLBACK] User data from API:', {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            is_admin: userData.rights?.is_admin
+        })
+
         cookieStore.set({
             name: 'user',
             value: JSON.stringify(user),
@@ -98,6 +106,10 @@ export async function GET(request: Request) {
             maxAge: 60 * 60 * 24 * 7,
             path: '/'
         })
+
+// Проверяем, что кука сохранилась
+        const savedUser = cookieStore.get('user')
+        console.log('[CALLBACK] Saved user cookie:', savedUser?.value)
 
         // 4. КРИТИЧЕСКИ ВАЖНО: Получаем правильные сессионные куки
         console.log('[CALLBACK] Fetching main page to get session cookies...')
@@ -201,7 +213,7 @@ export async function GET(request: Request) {
         const baseUrl = process.env.NODE_ENV === 'production'
             ? 'https://diplom-react-two.vercel.app'
             : 'http://localhost:3000'
-D
+
         return NextResponse.redirect(new URL('/', baseUrl))
 
     } catch (error) {

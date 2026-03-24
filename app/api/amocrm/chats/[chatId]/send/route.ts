@@ -70,30 +70,14 @@ export async function POST(
 
         const dealId = talk.entity.id
         const contactId = talk.contact_id
+        const recipientId = talk.contact?.amojo_id || talk.contact?.id
         const crmDialogId = talk.id
         const accountId = 32967126
         const amojoId = process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
 
-        // Извлекаем recipient_id из URL аватара
-        let recipientId = null
-        if (talk.contact?.profile_avatar) {
-            const match = talk.contact.profile_avatar.match(/\/profiles\/([a-f0-9-]+)\//)
-            if (match) {
-                recipientId = match[1]
-            }
-        }
-
-        console.log('[SEND] recipientId extracted:', recipientId)
-
-        if (!recipientId) {
-            return NextResponse.json(
-                { error: 'Recipient ID not found for this chat' },
-                { status: 404 }
-            )
-        }
-
         const amojoUrl = `https://amojo.amocrm.ru/v1/chats/${amojoId}/${chatId}/messages?with_video=true&stand=v16`
 
+        // Делаем crm_contact_id строкой, остальное как в браузере
         const body = {
             silent: false,
             priority: "low",
@@ -104,10 +88,10 @@ export async function POST(
             persona_name: user.name || 'Менеджер',
             persona_avatar: "https://images.amocrm.ru/frontend/images/interface/avatars/1.jpeg",
             text: text.trim(),
-            recipient_id: recipientId,  // UUID из URL аватара
+            recipient_id: recipientId,
             group_id: null,
             crm_dialog_id: crmDialogId,
-            crm_contact_id: contactId,
+            crm_contact_id: String(contactId),  // 👈 СТРОКОЙ!
             crm_account_id: accountId,
             skip_link_shortener: false,
             set_personalization: false

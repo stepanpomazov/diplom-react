@@ -1,11 +1,43 @@
 // lib/amocrm-chat-service.ts
 import crypto from 'crypto';
 
+interface ChatMessage {
+    id: string
+    text: string
+    created_at: number
+    author_id: number
+    author_name: string
+    is_client: boolean
+}
+
+interface AmojoMessage {
+    timestamp: number
+    message?: {
+        id?: string
+        text?: string
+    }
+    sender?: {
+        id?: string
+        name?: string
+        client_id?: string
+        ref_id?: string
+    }
+}
+
+interface AmojoResponse {
+    messages?: AmojoMessage[]
+    new_message?: {
+        msgid?: string
+        conversation_id?: string
+    }
+}
+
 export class AmoCrmChatService {
     private accessToken: string
     private subdomain: string
     private scopeId: string
     private channelSecret: string
+    private userId?: number
 
     constructor() {
         this.accessToken = process.env.AMOCRM_ACCESS_TOKEN!
@@ -21,36 +53,31 @@ export class AmoCrmChatService {
         }
     }
 
-    private async ajaxRequest(endpoint: string, options: RequestInit = {}) {
-        const url = `https://amojo.amocrm.ru${endpoint}`
-        console.log('[ChatService] Requesting:', url)
-        console.log('[ChatService] Method:', options.method || 'GET')
+    setUserId(userId: number) {
+        this.userId = userId;
+    }
 
-        // Формируем обязательные заголовки для API Чатов
-        const method = options.method || 'GET';
+    private async ajaxRequest<T = AmojoResponse>(endpoint: string, options: RequestInit = {}): Promise<T> {
+        const url = `https://amojo.amocrm.ru${endpoint}`;
+        const method = (options.method || 'GET').toUpperCase();
         const contentType = 'application/json';
         const date = new Date().toUTCString();
 
-        // Тело запроса (для GET может быть пустым)
         const body = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : '';
-
-        // Вычисляем Content-MD5 (даже для пустого тела)
         const checkSum = crypto.createHash('md5').update(body).digest('hex').toLowerCase();
 
-        // Путь без query параметров
-        const path = endpoint.split('?')[0];
+        const pathForSign = endpoint.split('?')[0];
 
-        // Строка для подписи
         const stringToSign = [
             method,
             checkSum,
             contentType,
             date,
-            path
+            pathForSign
         ].join('\n');
 
-        // Вычисляем X-Signature
-        const signature = crypto.createHmac('sha1', this.channelSecret)
+        const signature = crypto
+            .createHmac('sha1', this.channelSecret)
             .update(stringToSign)
             .digest('hex')
             .toLowerCase();
@@ -63,42 +90,78 @@ export class AmoCrmChatService {
             ...options.headers
         };
 
-        console.log('[ChatService] Headers:', {
-            Date: date,
-            'Content-MD5': checkSum,
-            'X-Signature': signature
-        });
+        console.log('[amojo] String to sign:', stringToSign);
+        console.log('[amojo] Signature:', signature);
 
-        const response = await fetch(url, {
-            ...options,
-            headers: headers
-        });
+        const response = await fetch(url, { ...options, headers });
 
         if (!response.ok) {
-            const text = await response.text()
-            console.error('[ChatService] Error response:', text)
-            throw new Error(`AmoCRM API error: ${response.status} - ${text}`)
+            const text = await response.text();
+            console.error('[amojo] Error:', response.status, text);
+            throw new Error(`amojo error ${response.status}: ${text}`);
         }
 
-        return response.json()
+        return response.json();
     }
 
-    // Получить сообщения чата
-    async getChatMessages(conversationId: string) {
+    async getChatMessages(conversationId: string, limit = 50, offset = 0): Promise<ChatMessage[]> {
         try {
-            console.log('[ChatService] Getting messages for conversation:', conversationId)
-            const data = await this.ajaxRequest(
-                `/v2/origin/custom/${this.scopeId}/chats/${conversationId}/history?limit=50`
-            )
-            return data?.messages || []
+            const query = `?limit=${limit}&offset=${offset}`;
+            const endpoint = `/v2/origin/custom/${this.scopeId}/chats/${conversationId}/history${query}`;
+
+            const data = await this.ajaxRequest<AmojoResponse>(endpoint);
+
+            console.log('[amojo] History loaded:', data.messages?.length || 0, 'messages');
+
+            return (data.messages || []).map((msg: AmojoMessage) => {
+                const senderId = msg.sender?.id || '';
+                const senderRefId = msg.sender?.ref_id;
+                const senderClientId = msg.sender?.client_id;
+
+                const isManager = senderId.includes('manager') || !!senderRefId;
+                const isClient = !!senderClientId || senderId.includes('contact');
+
+                const isClientMessage: boolean = isClient && !isManager;
+
+                return {
+                    id: msg.message?.id || `msg_${msg.timestamp}`,
+                    text: msg.message?.text || '',
+                    created_at: msg.timestamp,
+                    author_id: isManager ? (this.userId || 0) : 0,
+                    author_name: msg.sender?.name || (isClientMessage ? 'Клиент' : 'Система'),
+                    is_client: isClientMessage
+                };
+            });
         } catch (error) {
-            console.error('Error getting messages:', error)
-            return []
+            console.error('[getChatMessages] Error:', error);
+            return [];
         }
     }
 
-    // Отправить сообщение
-    async sendMessage(conversationId: string, text: string, userId: number, userName: string, userAmojoId: string, contactId: number, contactName: string) {
+    async getAllChatMessages(conversationId: string): Promise<ChatMessage[]> {
+        let allMessages: ChatMessage[] = [];
+        let offset = 0;
+        const limit = 50;
+
+        while (true) {
+            const batch = await this.getChatMessages(conversationId, limit, offset);
+            allMessages = allMessages.concat(batch);
+            if (batch.length < limit) break;
+            offset += limit;
+        }
+
+        return allMessages;
+    }
+
+    async sendMessage(
+        conversationId: string,
+        text: string,
+        userId: number,
+        userName: string,
+        userAmojoId: string,
+        contactId: number,
+        contactName: string
+    ): Promise<{ message: { msgid?: string; conversation_id?: string }; conversation_id: string }> {
         try {
             console.log('[ChatService] Sending message to conversation:', conversationId)
 
@@ -126,14 +189,13 @@ export class AmoCrmChatService {
                 }
             };
 
-            const data = await this.ajaxRequest(`/v2/origin/custom/${this.scopeId}`, {
+            const data = await this.ajaxRequest<AmojoResponse>(`/v2/origin/custom/${this.scopeId}`, {
                 method: 'POST',
                 body: JSON.stringify(payload)
             });
 
-            // ВАЖНО: возвращаем и сообщение, и conversation_id из ответа
             return {
-                message: data?.new_message,
+                message: data?.new_message || {},
                 conversation_id: data?.new_message?.conversation_id || conversationId
             };
         } catch (error) {

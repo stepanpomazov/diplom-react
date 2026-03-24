@@ -101,7 +101,7 @@ export class AmoCrmService {
         }
     }
 
-    private async request<T>(endpoint: string): Promise<T> {
+    public async request<T>(endpoint: string): Promise<T> {
         console.log(`[AmoCRM] Requesting: ${endpoint}`)
         const response = await fetch(`https://${this.subdomain}.amocrm.ru/api/v4${endpoint}`, {
             headers: {
@@ -130,6 +130,10 @@ export class AmoCrmService {
         return data
     }
 
+    async getTalks(): Promise<{ _embedded?: { talks?: unknown[] } }> {
+        return this.request('/api/v4/talks')
+    }
+
     async getUserAmojoId(userId: number): Promise<string | null> {
         try {
             console.log('[AmoCRM] Getting amojo_id for user:', userId);
@@ -144,6 +148,11 @@ export class AmoCrmService {
             console.error('Error getting user amojo_id:', error);
             return null;
         }
+    }
+
+    async getAccount(): Promise<{ id: number; name: string; subdomain: string; current_user_id: number; amojo_id?: string }> {
+        const data = await this.request<{ id: number; name: string; subdomain: string; current_user_id: number; amojo_id?: string }>('/account?with=amojo_id')
+        return data
     }
 
     async getCurrentUserAmojoId(userId: number): Promise<string | null> {
