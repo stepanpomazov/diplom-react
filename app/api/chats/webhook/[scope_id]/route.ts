@@ -1,16 +1,16 @@
-// app/api/chats/webhook/[scopeId]/route.ts
+// app/api/chats/webhook/[scope_id]/route.ts
 import { NextResponse } from 'next/server'
 
 export async function POST(
     request: Request,
-    { params }: { params: Promise<{ scopeId: string }> }
+    { params }: { params: Promise<{ scope_id: string }> }  // ← исправлено: scope_id
 ) {
     try {
-        const { scopeId } = await params
+        const { scope_id } = await params  // ← исправлено: scope_id
         const body = await request.json()
 
         console.log('[WEBHOOK] ===== RECEIVED =====')
-        console.log('[WEBHOOK] Scope:', scopeId)
+        console.log('[WEBHOOK] Scope:', scope_id)
         console.log('[WEBHOOK] Event:', body.event_type)
         console.log('[WEBHOOK] Payload:', JSON.stringify(body.payload, null, 2))
 
