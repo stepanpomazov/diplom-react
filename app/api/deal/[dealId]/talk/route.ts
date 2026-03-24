@@ -1,4 +1,4 @@
-// app/api/talks/[id]/route.ts
+// app/api/deal/[dealId]/talk/route.ts
 import { NextResponse } from 'next/server'
 import { AmoCrmService } from '@/lib/amocrm-service'
 
@@ -11,22 +11,28 @@ interface TalkResponse {
 
 export async function GET(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ dealId: string }> }  // ← dealId
 ) {
     try {
-        const { id } = await params
+        const { dealId } = await params  // ← dealId
+        const dealIdNum = parseInt(dealId)
+
+        if (isNaN(dealIdNum)) {
+            return NextResponse.json({ error: 'Invalid deal ID' }, { status: 400 })
+        }
+
         const amoCrm = new AmoCrmService()
 
-        // Пробуем получить беседу по talk_id
+        // Пробуем получить беседу по deal_id
         const endpoints = [
-            `/api/v4/talks/${id}`,
-            `/api/v4/im/talks/${id}`,
-            `/api/v4/chat/talks/${id}`
+            `/api/v4/leads/${dealIdNum}/talks`,
+            `/api/v4/leads/${dealIdNum}/chats`,
+            `/api/v4/talks?filter[entity_id]=${dealIdNum}&filter[entity_type]=lead`
         ]
 
         for (const endpoint of endpoints) {
             try {
-                console.log(`[Talk] Trying: ${endpoint}`)
+                console.log(`[Deal Talk] Trying: ${endpoint}`)
                 const data = await amoCrm.request<TalkResponse>(endpoint)
                 return NextResponse.json({
                     success: true,
@@ -35,19 +41,19 @@ export async function GET(
                 })
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-                console.log(`[Talk] Failed: ${endpoint} - ${errorMessage}`)
+                console.log(`[Deal Talk] Failed: ${endpoint} - ${errorMessage}`)
             }
         }
 
         return NextResponse.json({
             success: false,
-            talkId: id,
-            note: 'API не возвращает информацию о беседе, но чат существует в интерфейсе'
+            dealId: dealIdNum,
+            note: 'API не возвращает информацию о беседе по этой сделке'
         })
 
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        console.error('[Talk] Error:', error)
+        console.error('[Deal Talk] Error:', error)
         return NextResponse.json({ error: errorMessage }, { status: 500 })
     }
 }
