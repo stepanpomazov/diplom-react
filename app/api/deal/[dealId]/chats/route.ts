@@ -1,4 +1,4 @@
-// app/api/deal/[id]/chats/route.ts
+// app/api/deal/[dealId]/chats/route.ts
 import { NextResponse } from 'next/server'
 
 // Тип для ответа от API
@@ -14,13 +14,13 @@ interface ChatsResponse {
 
 export async function GET(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ dealId: string }> }
 ) {
     try {
-        const { id } = await params
-        const dealId = parseInt(id)
+        const { dealId } = await params
+        const dealIdNum = parseInt(dealId)
 
-        if (isNaN(dealId)) {
+        if (isNaN(dealIdNum)) {
             return NextResponse.json({ error: 'Invalid deal ID' }, { status: 400 })
         }
 
@@ -28,7 +28,7 @@ export async function GET(
         const cookie = request.headers.get('cookie') || ''
 
         const response = await fetch(
-            `https://bociwoto.amocrm.ru/ajax/v4/leads/${dealId}/chats?page=1&limit=10`,
+            `https://bociwoto.amocrm.ru/ajax/v4/leads/${dealIdNum}/chats?page=1&limit=10`,
             {
                 headers: {
                     'Cookie': cookie,
@@ -46,14 +46,14 @@ export async function GET(
 
         // Извлекаем chat_id из ответа
         const chats = data._embedded?.chats || []
-        const chat = chats[0] // берем первый чат
+        const chat = chats[0]
 
         return NextResponse.json({
             success: true,
             chat_id: chat?.chat_id,
             token: chat?.token,
             entity_id: chat?.entity_id,
-            deal_id: dealId
+            deal_id: dealIdNum
         })
 
     } catch (error: unknown) {
