@@ -1,6 +1,8 @@
+// app/api/chats/[chatId]/send/route.ts
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import crypto from 'crypto'
 import { getClientIdByConversation } from '@/lib/chatDB'
 
 export async function POST(
@@ -8,11 +10,9 @@ export async function POST(
     { params }: { params: Promise<{ chatId: string }> }
 ) {
     try {
-        // соответствуем типу: сначала await params
         const { chatId } = await params
         const { text } = await request.json()
 
-        // дальше твоя логика как раньше
         if (!text?.trim()) {
             return NextResponse.json(
                 { error: 'Message text is required' },
@@ -31,24 +31,21 @@ export async function POST(
         }
 
         const user = JSON.parse(userCookie.value)
-        const allCookies = cookieStore.toString()
 
-        const authToken = process.env.AMOCRM_X_AUTH_TOKEN
-        const subdomain = process.env.AMOCRM_SUBDOMAIN
-        const amojoId =
-            process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
-        const accountId = 32967126
+        const channelId = process.env.AMOCRM_CHANNEL_ID
+        const channelSecret = process.env.AMOCRM_CHANNEL_SECRET
 
-        if (!authToken || !subdomain) {
+        if (!channelId || !channelSecret) {
             return NextResponse.json(
-                { error: 'Missing AmoCRM configuration' },
+                { error: 'Channel credentials are not configured' },
                 { status: 500 }
             )
         }
 
-        const recipientId = await getClientIdByConversation(chatId)
+        // 1) recipient_id из Neon
+        const clientId = await getClientIdByConversation(chatId)
 
-        if (!recipientId) {
+        if (!clientId) {
             return NextResponse.json(
                 {
                     error:
@@ -58,91 +55,72 @@ export async function POST(
             )
         }
 
-        const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
+        // 2) Формируем origin payload
+        const method = 'POST'
+        const contentType = 'application/json'
+        const date = new Date().toUTCString()
+        const path = `/v2/origin/custom/${channelId}`
 
-        const inboxResponse = await fetch(inboxUrl, {
-            headers: {
-                Cookie: allCookies,
-                'X-Requested-With': 'XMLHttpRequest',
-                Accept: 'application/json'
+        const payload = {
+            event_type: 'new_message',
+            payload: {
+                conversation_id: chatId,
+                sender: {
+                    // ID менеджера на стороне интеграции, можно связать с user.id
+                    id: `my_int-manager-${user.id}`,
+                    name: user.name || 'Manager'
+                },
+                receiver: {
+                    id: clientId
+                },
+                message: {
+                    type: 'text',
+                    text: text.trim()
+                }
             }
-        })
-
-        if (!inboxResponse.ok) {
-            return NextResponse.json(
-                { error: 'Failed to get chat info' },
-                { status: inboxResponse.status }
-            )
         }
 
-        const inboxData = await inboxResponse.json()
-        const talks = inboxData._embedded?.talks || []
-        const talk = talks.find((t: any) => t.chat_id === chatId)
+        const requestBody = JSON.stringify(payload)
+        const contentMd5 = crypto
+            .createHash('md5')
+            .update(requestBody)
+            .digest('hex')
 
-        if (!talk) {
-            return NextResponse.json(
-                { error: 'Chat not found', chat_id: chatId },
-                { status: 404 }
-            )
-        }
+        const stringToSign = [method, contentMd5, contentType, date, path].join(
+            '\n'
+        )
 
-        const dealId = talk.entity.id
-        const contactId = talk.contact_id
-        const crmDialogId = talk.id
+        const signature = crypto
+            .createHmac('sha1', channelSecret)
+            .update(stringToSign)
+            .digest('hex')
 
-        const amojoUrl = `https://amojo.amocrm.ru/v1/chats/${amojoId}/${chatId}/messages?with_video=true&stand=v16`
+        const url = `https://amojo.amocrm.ru${path}`
 
-        const body = {
-            silent: false,
-            priority: 'low',
-            crm_entity: {
-                id: dealId,
-                type: 2
-            },
-            persona_name: user.name || 'Менеджер',
-            persona_avatar:
-                'https://images.amocrm.ru/frontend/images/interface/avatars/1.jpeg',
-            text: text.trim(),
-            recipient_id: recipientId,
-            group_id: null,
-            crm_dialog_id: crmDialogId,
-            crm_contact_id: contactId,
-            crm_account_id: accountId,
-            skip_link_shortener: false,
-            set_personalization: false
-        }
+        console.log('[SEND-origin] URL:', url)
+        console.log('[SEND-origin] StringToSign:', stringToSign)
+        console.log('[SEND-origin] Signature:', signature)
+        console.log('[SEND-origin] Body:', JSON.stringify(payload, null, 2))
 
-        console.log('[SEND] Body:', JSON.stringify(body, null, 2))
-
-        const response = await fetch(amojoUrl, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
-                accept: 'application/json, text/javascript, */*; q=0.01',
-                'accept-language': 'ru,en;q=0.9',
-                'cache-control': 'no-cache',
-                'content-type': 'application/json',
-                pragma: 'no-cache',
-                'x-auth-token': authToken,
-                'sec-ch-ua':
-                    '"Not(A:Brand";v="8", "Chromium";v="144", "YaBrowser";v="26.3", "Yowser";v="2.5"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site'
+                Date: date,
+                'Content-Type': contentType,
+                'Content-MD5': contentMd5,
+                'X-Signature': signature
             },
-            referrer: `https://${subdomain}.amocrm.ru/`,
-            body: JSON.stringify(body)
+            body: requestBody
         })
 
         const responseText = await response.text()
-        console.log('[SEND] Response status:', response.status)
-        console.log('[SEND] Response:', responseText)
+        console.log('[SEND-origin] Response status:', response.status)
+        console.log('[SEND-origin] Response body:', responseText)
 
         if (!response.ok) {
             return NextResponse.json(
                 {
-                    error: 'Failed to send message',
+                    error: 'Failed to send message via origin API',
                     details: responseText,
                     status: response.status
                 },
@@ -157,6 +135,7 @@ export async function POST(
             data = { raw: responseText }
         }
 
+        // Обновляем локальный стор сообщений (как и раньше)
         await fetch(
             `${
                 process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -167,7 +146,7 @@ export async function POST(
                 body: JSON.stringify({
                     chatId,
                     message: {
-                        id: data.id || `msg_${Date.now()}`,
+                        id: data.message?.id || `msg_${Date.now()}`,
                         text: text.trim(),
                         created_at: Math.floor(Date.now() / 1000),
                         author_name: user.name || 'Вы',
@@ -180,7 +159,7 @@ export async function POST(
         return NextResponse.json({
             success: true,
             message: {
-                id: data.id || `msg_${Date.now()}`,
+                id: data.message?.id || `msg_${Date.now()}`,
                 text: text.trim(),
                 created_at: Math.floor(Date.now() / 1000),
                 author_name: user.name || 'Вы',
@@ -189,7 +168,7 @@ export async function POST(
             }
         })
     } catch (error) {
-        console.error('[SEND] Error:', error)
+        console.error('[SEND-origin] Error:', error)
         const message =
             error instanceof Error ? error.message : 'Internal server error'
         return NextResponse.json({ error: message }, { status: 500 })
