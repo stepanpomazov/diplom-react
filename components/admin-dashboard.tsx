@@ -6,44 +6,7 @@ import { DonutChart } from "@/components/donut-chart"
 import { Button } from "@/components/ui/button"
 import { Users, User, Loader2, Calendar, Handshake, TrendingUp, UserCircle, Building2, ChevronLeft } from "lucide-react"
 import { ChatModal } from "@/components/chat-modal"
-
-// Типы для данных
-export interface Employee {
-    id: number
-    name: string
-    email: string
-}
-
-interface EmployeeStats {
-    employeeId: number
-    employeeName: string
-    totalDeals: number
-    totalAmount: number
-    successTotal: number
-    failTotal: number
-    successMonth: number
-    failMonth: number
-    newClientsMonth: number
-    targetClientsMonth: number
-}
-
-interface Deal {
-    id: number
-    name: string
-    price: number
-    status_id: number
-    created_at: number
-    responsible_user_id: number
-    _embedded?: {
-        contacts?: Array<{ id: number; is_main?: boolean }>
-        companies?: Array<{ id: number }>
-    }
-}
-
-interface DashboardData {
-    aggregated: EmployeeStats
-    employees: EmployeeStats[]
-}
+import {DashboardData, Deal} from "@/lib/types/types";
 
 export function AdminDashboard() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)

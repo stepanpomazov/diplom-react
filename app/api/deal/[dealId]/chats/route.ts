@@ -1,16 +1,6 @@
 // app/api/deal/[dealId]/chats/route.ts
 import { NextResponse } from 'next/server'
-
-// Тип для ответа от API
-interface ChatsResponse {
-    _embedded?: {
-        chats?: Array<{
-            chat_id?: string
-            token?: string
-            entity_id?: number
-        }>
-    }
-}
+import {ChatsResponse} from "@/lib/types/types";
 
 export async function GET(
     request: Request,
@@ -28,7 +18,7 @@ export async function GET(
         const cookie = request.headers.get('cookie') || ''
 
         const response = await fetch(
-            `https://bociwoto.amocrm.ru/ajax/v4/leads/${dealIdNum}/chats?page=1&limit=10`,
+            `https://pomazovsp.amocrm.ru/ajax/v4/leads/${dealIdNum}/chats?page=1&limit=10`,
             {
                 headers: {
                     'Cookie': cookie,

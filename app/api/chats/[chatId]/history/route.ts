@@ -2,6 +2,19 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
+interface RawMessage {
+    timestamp: number
+    message?: {
+        id?: string
+        text?: string
+    }
+    sender?: {
+        id?: string
+        name?: string
+        client_id?: string
+    }
+}
+
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ chatId: string }> }
@@ -16,7 +29,7 @@ export async function GET(
             )
         }
 
-        const scopeId = process.env.AMOCRM_SCOPE_ID // Должно быть: "140dd02f-ca26-4d1d-a4a1-c7fb79f91c54_ef3cde97-d03c-4b92-b3c6-f15c79c81628"
+        const scopeId = process.env.AMOCRM_SCOPE_ID
         const channelSecret = process.env.AMOCRM_CHANNEL_SECRET
 
         if (!scopeId || !channelSecret) {
@@ -34,23 +47,15 @@ export async function GET(
         const method = 'GET'
         const contentType = 'application/json'
         const date = new Date().toUTCString()
+        const contentMd5 = crypto
+            .createHash('md5')
+            .update('')
+            .digest('hex')
+            .toLowerCase()
 
-        // Для GET запроса тело пустое
-        const contentMd5 = crypto.createHash('md5').update('').digest('hex').toLowerCase()
-
-        // ПРАВИЛЬНЫЙ путь с полным scopeId
         const path = `/v2/origin/custom/${scopeId}/chats/${chatId}/history`
 
-        // Строка для подписи
-        const stringToSign = [
-            method,
-            contentMd5,
-            contentType,
-            date,
-            path
-        ].join('\n')
-
-        console.log('[amojo history] String to sign:', stringToSign)
+        const stringToSign = [method, contentMd5, contentType, date, path].join('\n')
 
         const signature = crypto
             .createHmac('sha1', channelSecret)
@@ -61,18 +66,15 @@ export async function GET(
         const fullUrl = `https://amojo.amocrm.ru${path}?limit=${limit}&offset=${offset}`
 
         console.log('[amojo history] Full URL:', fullUrl)
-        console.log('[amojo history] Date:', date)
-        console.log('[amojo history] Content-MD5:', contentMd5)
-        console.log('[amojo history] Signature:', signature)
 
         const response = await fetch(fullUrl, {
             method: 'GET',
             headers: {
-                'Date': date,
+                Date: date,
                 'Content-Type': contentType,
                 'Content-MD5': contentMd5,
-                'X-Signature': signature
-            }
+                'X-Signature': signature,
+            },
         })
 
         const responseText = await response.text()
@@ -88,7 +90,7 @@ export async function GET(
 
         const data = JSON.parse(responseText)
 
-        const formattedMessages = (data.messages || []).map((msg: any) => ({
+        const formattedMessages = (data.messages || []).map((msg: RawMessage) => ({
             id: msg.message?.id || `msg_${msg.timestamp}`,
             text: msg.message?.text || '',
             created_at: msg.timestamp,
@@ -97,7 +99,6 @@ export async function GET(
         }))
 
         return NextResponse.json({ messages: formattedMessages })
-
     } catch (error) {
         console.error('[api/chats/[chatId]/history] Error:', error)
         return NextResponse.json(

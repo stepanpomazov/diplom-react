@@ -1,14 +1,65 @@
+// app/api/chats/connect-channel/route.ts
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+
+interface ConnectResponse {
+    scope_id?: string
+    account_id?: string
+    [key: string]: unknown
+}
+
+async function getAccountAmojoId() {
+    const subdomain = process.env.AMOCRM_SUBDOMAIN
+    const accessToken = process.env.AMOCRM_ACCESS_TOKEN
+
+    if (!subdomain || !accessToken) {
+        throw new Error('AMOCRM_SUBDOMAIN or AMOCRM_ACCESS_TOKEN is not set')
+    }
+
+    const url = `https://${subdomain}.amocrm.ru/api/v4/account?with=amojo_id`
+    console.log('[Amojo Connect] Fetching amojo_id from:', url)
+
+    const resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json'
+        }
+    })
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '')
+        console.error('[Amojo Connect] Failed to get amojo_id:', resp.status, text)
+        throw new Error(`Failed to get amojo_id: ${resp.status}`)
+    }
+
+    const data = await resp.json() as { amojo_id?: string }
+    console.log('[Amojo Connect] Account data amojo_id:', data.amojo_id)
+
+    if (!data.amojo_id) {
+        throw new Error('amojo_id not found in account response')
+    }
+
+    return data.amojo_id
+}
 
 export async function POST() {
     console.log('[Amojo Connect] Starting connection...')
 
     try {
-        // НОВЫЕ параметры для аккаунта bociwoto
-        const channelId = '9a065889-cec5-4354-9965-f768e0349ca2'
-        const channelSecret = '6bb1e8981ea34b2181135fb4a56f8a0e158ff359'
-        const amojoId = '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
+        const channelId = process.env.AMOCRM_CHANNEL_ID
+        const channelSecret = process.env.AMOCRM_CHANNEL_SECRET
+
+        if (!channelId || !channelSecret) {
+            console.error('[Amojo Connect] Channel credentials not set in env')
+            return NextResponse.json(
+                { error: 'AMOCRM_CHANNEL_ID or AMOCRM_CHANNEL_SECRET is not set' },
+                { status: 500 }
+            )
+        }
+
+        // 1. Получаем amojo_id аккаунта через REST API
+        const amojoId = await getAccountAmojoId()
 
         console.log('[Amojo Connect] Channel ID:', channelId)
         console.log('[Amojo Connect] Amojo ID:', amojoId)
@@ -63,19 +114,26 @@ export async function POST() {
         console.log('[Amojo Connect] Response status:', response.status)
         console.log('[Amojo Connect] Response body:', responseText)
 
-        let data
+        let data: ConnectResponse
         try {
             data = JSON.parse(responseText)
         } catch {
             data = { raw: responseText }
         }
 
-        return NextResponse.json(data, { status: response.status })
+        if (data.scope_id) {
+            console.log('[Amojo Connect] ✅ Scope ID:', data.scope_id)
+        }
 
-    } catch (error: any) {
+        return NextResponse.json(data, { status: response.status })
+    } catch (error: unknown) {
         console.error('[Amojo Connect] Error:', error)
+
+        const message =
+            error instanceof Error ? error.message : 'Internal server error'
+
         return NextResponse.json(
-            { error: error.message },
+            { error: message },
             { status: 500 }
         )
     }
@@ -84,8 +142,7 @@ export async function POST() {
 export async function GET() {
     return NextResponse.json({
         message: 'Amojo Connect endpoint is working. Use POST method to connect.',
-        channelId: '9a065889-cec5-4354-9965-f768e0349ca2',
-        amojoId: '02a3e344-9bc0-4b0c-95a0-aa2f7d747314',
-        accountId: '32967126'
+        channelId: process.env.AMOCRM_CHANNEL_ID || null,
+        subdomain: process.env.AMOCRM_SUBDOMAIN || null
     })
 }

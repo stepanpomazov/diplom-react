@@ -7,42 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ChatAIAnalysis } from "./chat-ai-analysis"
-
-interface Message {
-    id: string
-    text: string
-    created_at: number
-    author_id?: number
-    author_name?: string
-    is_client?: boolean
-}
-
-interface TalkInfo {
-    id: number
-    chat_id: string
-    origin?: string
-    created_at?: number
-    updated_at?: number
-    is_in_work?: boolean
-    is_read?: boolean
-    url?: string
-    entity_id?: number
-    entity_type?: string
-}
-
-interface ChatModalProps {
-    deal: {
-        id: number
-        name: string
-        price: number
-        contact_name?: string
-        company_name?: string
-    } | null
-    isOpen: boolean
-    onClose: () => void
-    userId: number
-    userName: string
-}
+import {ChatModalProps, Message, TalkInfo} from "@/lib/types/types";
 
 export function ChatModal({ deal, isOpen, onClose, userId, userName }: ChatModalProps) {
     const [messages, setMessages] = useState<Message[]>([])

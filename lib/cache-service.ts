@@ -1,20 +1,10 @@
 // lib/cache-service.ts
 import fs from 'fs/promises'
 import path from 'path'
+import {CacheEntry} from "@/lib/types/types";
 
 const CACHE_DIR = path.join(process.cwd(), '.cache')
 const CACHE_TTL = 60 * 60 * 24 // 24 часа в секундах
-
-// Тип для данных кэша
-export interface CacheData<T = unknown> {
-    data: T
-    expiresAt: number
-    createdAt: number
-    chatId: string
-    messageCount: number
-}
-
-export interface CacheEntry<T = unknown> extends CacheData<T> {}
 
 export class CacheService {
     private static instance: CacheService

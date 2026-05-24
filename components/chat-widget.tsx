@@ -5,12 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send } from 'lucide-react'
-
-interface ChatWidgetProps {
-    dealId: number
-    contactId: number
-    userId: number
-}
+import {ChatWidgetProps} from "@/lib/types/types";
 
 export function ChatWidget({ dealId, contactId, userId }: ChatWidgetProps) {
     const [message, setMessage] = useState('')

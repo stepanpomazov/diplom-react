@@ -41,6 +41,7 @@ export function LoginForm() {
         } catch (err) {
             setError("Ошибка соединения с сервером")
             setIsLoading(false)
+            console.log(err)
         }
     }
 
@@ -60,6 +61,7 @@ export function LoginForm() {
         } catch (err) {
             setError("Ошибка демо-входа")
             setIsLoading(false)
+            console.log(err)
         }
     }
 

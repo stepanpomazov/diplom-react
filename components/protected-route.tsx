@@ -4,10 +4,7 @@
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-
-interface ProtectedRouteProps {
-    children: React.ReactNode
-}
+import {ProtectedRouteProps} from "@/lib/types/types";
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const { user, isLoading } = useAuth()

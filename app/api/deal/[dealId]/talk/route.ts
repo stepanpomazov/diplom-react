@@ -1,13 +1,7 @@
 // app/api/deal/[dealId]/talk/route.ts
 import { NextResponse } from 'next/server'
 import { AmoCrmService } from '@/lib/amocrm-service'
-
-// Тип для ответа от API
-interface TalkResponse {
-    id?: number
-    chat_id?: string
-    [key: string]: unknown
-}
+import {TalkResponse} from "@/lib/types/types";
 
 export async function GET(
     request: Request,

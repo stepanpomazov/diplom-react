@@ -1,32 +1,10 @@
 // app/api/amojo/chats/create/route.ts
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
-
-// Типы для данных запроса
-interface CreateChatRequest {
-    contactName?: string
-    contactPhone?: string
-    contactEmail?: string
-    dealId?: number
-}
-
-// Тип для ответа от amoJO API
-interface AmojoResponse {
-    id?: string
-    user?: {
-        id?: string
-        client_id?: string
-        name?: string
-        avatar?: string
-        phone?: string
-        email?: string
-    }
-    [key: string]: unknown
-}
+import {AmojoResponse, CreateChatRequest} from "@/lib/types/types";
 
 export async function POST(request: Request) {
     try {
-        // Получаем данные из запроса
         let bodyData: CreateChatRequest = {}
         try {
             bodyData = await request.json()

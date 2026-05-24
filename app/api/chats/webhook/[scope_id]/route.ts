@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server'
 
 export async function POST(
     request: Request,
-    { params }: { params: Promise<{ scope_id: string }> }  // ← исправлено: scope_id
+    { params }: { params: Promise<{ scope_id: string }> }
 ) {
     try {
-        const { scope_id } = await params  // ← исправлено: scope_id
+        const { scope_id } = await params
         const body = await request.json()
 
         console.log('[WEBHOOK] ===== RECEIVED =====')
@@ -16,28 +16,36 @@ export async function POST(
 
         if (body.event_type === 'new_message' && body.payload) {
             const chatId = body.payload.conversation_id
+
             const message = {
                 id: body.payload.msgid || `msg_${Date.now()}`,
                 text: body.payload.message?.text || '',
-                created_at: body.payload.timestamp || Math.floor(Date.now() / 1000),
-                author_name: body.payload.sender?.name || 'Клиент',
+                created_at:
+                    body.payload.timestamp || Math.floor(Date.now() / 1000),
+                author_name:
+                    body.payload.sender?.name || 'Клиент',
                 is_client: true,
-                sender_id: body.payload.sender?.id
+
+                // Amojo-идентификаторы
+                raw_sender_id: body.payload.sender?.id || null,
+                raw_recipient_id: body.payload.recipient?.id || null,
             }
 
-            // Сохраняем через наш новый endpoint
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-            await fetch(`${baseUrl}/api/chats/messages`, {
+            const baseUrl =
+                process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+            await fetch(`${baseUrl.replace(/\/$/, '')}/api/chats/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId, message })
+                body: JSON.stringify({ chatId, message }),
             })
 
-            console.log(`[WEBHOOK] ✅ Saved message for chat ${chatId}: "${message.text}"`)
+            console.log(
+                `[WEBHOOK] ✅ Saved message for chat ${chatId}: "${message.text}"`
+            )
         }
 
         return NextResponse.json({ status: 'ok' })
-
     } catch (error) {
         console.error('[WEBHOOK] Error:', error)
         return NextResponse.json(

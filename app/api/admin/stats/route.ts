@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { AmoCrmService } from '@/lib/amocrm-service'
-import {Employee} from "@/components/admin-dashboard";
+import {Employee} from "@/lib/types/types";
 
 export async function GET() {
     try {

@@ -1,6 +1,7 @@
 // app/api/chats/[chatId]/send/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import {getClientIdByChat} from "@/lib/chatParticipants";
 
 export async function POST(
     request: Request,
@@ -38,9 +39,9 @@ export async function POST(
                 { status: 500 }
             )
         }
-
+        const subdomain = process.env.AMOCRM_SUBDOMAIN;
         // Получаем информацию о чате
-        const inboxUrl = `https://bociwoto.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
+        const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
             headers: {
@@ -75,20 +76,11 @@ export async function POST(
         const amojoId = process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
 
         // Извлекаем recipient_id из URL аватара
-        let recipientId = null
-        if (talk.contact?.profile_avatar) {
-            const match = talk.contact.profile_avatar.match(/\/profiles\/([a-f0-9-]+)\//)
-            if (match) {
-                recipientId = match[1]
-            }
-        }
-
-        console.log('[SEND] recipientId extracted:', recipientId)
-
+        const recipientId = getClientIdByChat(chatId)
         if (!recipientId) {
             return NextResponse.json(
-                { error: 'Recipient ID not found for this chat' },
-                { status: 404 }
+                { error: 'No client id for this chat (webhook not received yet)' },
+                { status: 400 }
             )
         }
 
@@ -131,7 +123,7 @@ export async function POST(
                 'sec-fetch-mode': 'cors',
                 'sec-fetch-site': 'same-site'
             },
-            referrer: 'https://bociwoto.amocrm.ru/',
+            referrer: `https://${subdomain}.amocrm.ru/`,
             body: JSON.stringify(body)
         })
 

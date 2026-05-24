@@ -1,36 +1,6 @@
 // lib/amocrm-chat-service.ts
 import crypto from 'crypto';
-
-interface ChatMessage {
-    id: string
-    text: string
-    created_at: number
-    author_id: number
-    author_name: string
-    is_client: boolean
-}
-
-interface AmojoMessage {
-    timestamp: number
-    message?: {
-        id?: string
-        text?: string
-    }
-    sender?: {
-        id?: string
-        name?: string
-        client_id?: string
-        ref_id?: string
-    }
-}
-
-interface AmojoResponse {
-    messages?: AmojoMessage[]
-    new_message?: {
-        msgid?: string
-        conversation_id?: string
-    }
-}
+import {AmojoMessage, AmojoResponse, ChatMessage} from "@/lib/types/types";
 
 export class AmoCrmChatService {
     private accessToken: string

@@ -11,26 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ExportPDFButton } from './export-pdf-button'
 import { ExtendedChatAnalysis, MessageAnalysis } from '@/lib/types/chat-analysis'
-
-interface ChatAIAnalysisProps {
-    chatId: string
-    onSendSuggestion?: (text: string) => void
-}
-
-// Тип для ответа API
-interface AnalysisResponse {
-    success: boolean
-    analysis: ExtendedChatAnalysis
-    messages_count: number
-    used_ai: boolean
-    contact?: {
-        name?: string
-        id?: number
-    }
-    error?: string
-    message?: string
-
-}
+import {AnalysisResponse, ChatAIAnalysisProps} from "@/lib/types/types";
 
 export function ChatAIAnalysis({ chatId, onSendSuggestion }: ChatAIAnalysisProps) {
     const [analysis, setAnalysis] = useState<ExtendedChatAnalysis | null>(null)
@@ -44,7 +25,13 @@ export function ChatAIAnalysis({ chatId, onSendSuggestion }: ChatAIAnalysisProps
         try {
             const response = await fetch(`/api/chats/${chatId}/analyze`, { credentials: 'include' })
             const data: AnalysisResponse = await response.json()
-            if (!response.ok) throw new Error(data.error || 'Failed to analyze chat')
+
+            if (!response.ok) {
+                const message = data.error || 'Failed to analyze chat'
+                setError(message)
+                return
+            }
+
             setAnalysis(data.analysis)
             setHasAnalyzed(true)
         } catch (err: unknown) {

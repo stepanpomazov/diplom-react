@@ -1,92 +1,15 @@
 // lib/amocrm-service.ts
-// Типы для ответов от amoCRM
-interface AmoCrmDeal {
-    id: number
-    name: string
-    price: number
-    status_id: number
-    created_at: number
-    closed_at: number
-    responsible_user_id: number
-    _embedded?: {
-        contacts?: Array<{
-            id: number
-            name: string
-        }>
-        companies?: Array<{
-            id: number
-            name: string
-        }>
-    }
-}
 
-export interface DealWithContacts {
-    id: number
-    name: string
-    price: number
-    status_id: number
-    created_at: number
-    _embedded?: {
-        contacts?: Array<{
-            id: number
-            name: string
-            first_name?: string
-            last_name?: string
-        }>
-        companies?: Array<{
-            id: number
-            name: string
-        }>
-    }
-}
-
-interface AmoCrmUser {
-    id: number
-    name: string
-    email: string
-    rights?: {
-        leads?: {
-            view: 'all' | 'own' | 'none'
-        }
-    }
-}
-
-interface AmoCrmUserWithAmojoId extends AmoCrmUser {
-    amojo_id?: string
-}
-
-interface AmoCrmAccount {
-    id: number
-    name: string
-    subdomain: string
-    current_user_id: number
-}
-
-// Общий интерфейс для ответов API
-interface ApiResponse<T> {
-    _embedded?: {
-        leads?: T[]
-        users?: T[]
-    }
-    _links?: {
-        self?: { href: string }
-        next?: { href: string }
-    }
-}
-
-// Интерфейс для логирования
-interface LogData {
-    status: number
-    hasData: boolean
-    count: number
-}
-
-// Вспомогательный тип для проверки наличия _embedded
-type WithEmbedded<T> = T & {
-    _embedded?: {
-        leads?: unknown[]
-    }
-}
+import {
+    AmoCrmAccount,
+    AmoCrmDeal,
+    AmoCrmUser,
+    AmoCrmUserWithAmojoId,
+    ApiResponse,
+    DealWithContacts,
+    LogData,
+    WithEmbedded
+} from "./types/types"
 
 export class AmoCrmService {
     private accessToken: string
@@ -94,7 +17,7 @@ export class AmoCrmService {
 
     constructor() {
         this.accessToken = process.env.AMOCRM_ACCESS_TOKEN!
-        this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'stpomazov'
+        this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'pomazovsp'
 
         if (!this.accessToken) {
             throw new Error('AMOCRM_ACCESS_TOKEN is not set')
@@ -151,8 +74,13 @@ export class AmoCrmService {
     }
 
     async getAccount(): Promise<{ id: number; name: string; subdomain: string; current_user_id: number; amojo_id?: string }> {
-        const data = await this.request<{ id: number; name: string; subdomain: string; current_user_id: number; amojo_id?: string }>('/account?with=amojo_id')
-        return data
+        return await this.request<{
+            id: number;
+            name: string;
+            subdomain: string;
+            current_user_id: number;
+            amojo_id?: string
+        }>('/account?with=amojo_id')
     }
 
     async getCurrentUserAmojoId(userId: number): Promise<string | null> {

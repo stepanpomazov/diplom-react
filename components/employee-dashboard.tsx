@@ -15,54 +15,14 @@ import {
     Building2
 } from "lucide-react"
 import { ChatModal } from "@/components/chat-modal"
-
-// Типы для данных
-interface Deal {
-    id: number
-    name: string
-    price: number
-    status_id: number
-    created_at: number
-    _embedded?: {
-        contacts?: Array<{ id: number; is_main?: boolean }>
-        companies?: Array<{ id: number }>
-    }
-}
-
-interface Stats {
-    totalDeals: number
-    totalAmount: number
-    wonDeals: number
-    lostDeals: number
-    inProgress: number
-    monthDeals: number
-    monthAmount: number
-    yearDeals: number
-    yearAmount: number
-    avgDealAmount: number
-    conversion: number
-}
-
-interface DashboardData {
-    user: {
-        id: number
-        name: string
-        email: string
-        role?: string
-    }
-    stats: Stats
-    recentDeals: Deal[]
-}
-
-type MetricColor = 'blue' | 'green' | 'purple' | 'orange'
-type StatColor = 'green' | 'red' | 'blue'
+import {DashboardData, Deal, MetricColor, StatColor} from "@/lib/types/types";
 
 export function EmployeeDashboard() {
     const { user: authUser } = useAuth()
     const [data, setData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
-    const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
+    const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
     const [isChatOpen, setIsChatOpen] = useState(false)
 
     const fetchStats = async () => {

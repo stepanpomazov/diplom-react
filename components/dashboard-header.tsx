@@ -5,11 +5,7 @@ import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, ShieldUser, LayoutDashboard, Users } from "lucide-react"
-
-interface DashboardHeaderProps {
-    viewMode?: "admin" | "employee"
-    onViewModeChange?: (mode: "admin" | "employee") => void
-}
+import {DashboardHeaderProps} from "@/lib/types/types";
 
 export function DashboardHeader({ viewMode: externalViewMode, onViewModeChange }: DashboardHeaderProps) {
     const { user, logout } = useAuth()

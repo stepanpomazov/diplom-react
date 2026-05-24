@@ -1,16 +1,7 @@
 "use client"
 
 import { PieChart, ResponsiveContainer } from "recharts"
-
-interface DonutChartProps {
-    title: string
-    value1: number
-    value2: number
-    label1: string
-    label2: string
-    color1: string
-    color2: string
-}
+import {DonutChartProps} from "@/lib/types/types";
 
 export function DonutChart({
                                title,

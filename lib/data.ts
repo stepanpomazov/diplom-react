@@ -1,20 +1,4 @@
-export interface UserData {
-    id: string
-    username: string
-    password: string
-    name: string
-    role: "admin" | "employee"
-}
-
-export interface SalesData {
-    employeeId: string
-    successTotal: number
-    failTotal: number
-    successMonth: number
-    failMonth: number
-    newClientsMonth: number
-    targetClientsMonth: number
-}
+import {SalesData, UserData} from "@/lib/types/types";
 
 export const users: UserData[] = [
     {

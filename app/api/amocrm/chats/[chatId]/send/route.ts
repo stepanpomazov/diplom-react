@@ -40,7 +40,7 @@ export async function POST(
         }
 
         // Получаем информацию о чате
-        const inboxUrl = `https://bociwoto.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
+        const inboxUrl = `https://pomazovsp.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
             headers: {
@@ -115,7 +115,7 @@ export async function POST(
                 'sec-fetch-mode': 'cors',
                 'sec-fetch-site': 'same-site'
             },
-            referrer: 'https://bociwoto.amocrm.ru/',
+            referrer: 'https://pomazovsp.amocrm.ru/',
             body: JSON.stringify(body)
         })
 

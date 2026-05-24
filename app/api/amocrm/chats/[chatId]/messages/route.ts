@@ -1,4 +1,4 @@
-// app/api/chats/[chatId]/messages/route.ts
+// api/amocrm/chats[chatId]/messages/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
@@ -18,9 +18,9 @@ export async function GET(
 
         const cookieStore = await cookies()
         const cookieString = cookieStore.toString()
-
+        const subdomain = process.env.AMOCRM_SUBDOMAIN;
         // 1. Получаем deal_id по chat_id
-        const inboxUrl = `https://bociwoto.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
+        const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
             headers: {
@@ -51,7 +51,7 @@ export async function GET(
         const dealId = talk.entity.id
 
         // 2. Получаем сообщения через events_timeline
-        const eventsUrl = `https://bociwoto.amocrm.ru/ajax/v3/leads/${dealId}/events_timeline/?limit=200&filter[type]=89,90`
+        const eventsUrl = `https://${subdomain}.amocrm.ru/ajax/v3/leads/${dealId}/events_timeline/?limit=200&filter[type]=89,90`
 
         const eventsResponse = await fetch(eventsUrl, {
             headers: {

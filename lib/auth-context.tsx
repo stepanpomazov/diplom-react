@@ -3,24 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-
-export type UserRole = "admin" | "employee"
-
-export interface User {
-    id: number
-    name: string
-    email: string
-    role: UserRole
-    avatar?: string
-}
-
-interface AuthContextType {
-    user: User | null
-    login: (email: string, password: string) => Promise<boolean>
-    logout: () => Promise<void>
-    isLoading: boolean
-    isAuthenticated: boolean
-}
+import {AuthContextType, User} from "@/lib/types/types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
