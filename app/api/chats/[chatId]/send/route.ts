@@ -1,10 +1,11 @@
 // app/api/chats/[chatId]/send/route.ts
+import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getClientIdByConversation } from '@/lib/chatDB'
 
 export async function POST(
-    request: Request,
+    request: NextRequest,
     { params }: { params: { chatId: string } }
 ) {
     try {
@@ -35,7 +36,7 @@ export async function POST(
         const subdomain = process.env.AMOCRM_SUBDOMAIN
         const amojoId =
             process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
-        const accountId = 32967126 // можешь тоже вынести в env
+        const accountId = 32967126
 
         if (!authToken || !subdomain) {
             return NextResponse.json(
@@ -44,7 +45,7 @@ export async function POST(
             )
         }
 
-        // 1) Берём clientId (recipient_id) из нашей БД по chatId
+        // 1) recipient_id из нашей БД
         const recipientId = await getClientIdByConversation(chatId)
 
         if (!recipientId) {
@@ -57,7 +58,7 @@ export async function POST(
             )
         }
 
-        // 2) По-прежнему берём доп.инфу о чате из inbox
+        // 2) берём доп.инфу о чате из inbox
         const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
@@ -90,7 +91,7 @@ export async function POST(
         const contactId = talk.contact_id
         const crmDialogId = talk.id
 
-        // 3) Отправляем сообщение в Amojo, используя recipientId из БД
+        // 3) отправляем сообщение в Amojo
         const amojoUrl = `https://amojo.amocrm.ru/v1/chats/${amojoId}/${chatId}/messages?with_video=true&stand=v16`
 
         const body = {
@@ -158,7 +159,7 @@ export async function POST(
             data = { raw: responseText }
         }
 
-        // Обновляем локальный стор сообщений
+        // Обновление локального стора сообщений
         await fetch(
             `${
                 process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
