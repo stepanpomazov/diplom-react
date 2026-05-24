@@ -1,14 +1,14 @@
 // app/api/chats/[chatId]/send/route.ts
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import {getClientIdByChat} from "@/lib/chatParticipants";
+import { getClientIdByConversation } from '@/lib/chatDB'
 
 export async function POST(
     request: Request,
-    { params }: { params: Promise<{ chatId: string }> }
+    { params }: { params: { chatId: string } }
 ) {
     try {
-        const { chatId } = await params
+        const { chatId } = params
         const { text } = await request.json()
 
         if (!text?.trim()) {
@@ -32,22 +32,39 @@ export async function POST(
         const allCookies = cookieStore.toString()
 
         const authToken = process.env.AMOCRM_X_AUTH_TOKEN
+        const subdomain = process.env.AMOCRM_SUBDOMAIN
+        const amojoId =
+            process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
+        const accountId = 32967126 // можешь тоже вынести в env
 
-        if (!authToken) {
+        if (!authToken || !subdomain) {
             return NextResponse.json(
-                { error: 'Missing auth token' },
+                { error: 'Missing AmoCRM configuration' },
                 { status: 500 }
             )
         }
-        const subdomain = process.env.AMOCRM_SUBDOMAIN;
-        // Получаем информацию о чате
+
+        // 1) Берём clientId (recipient_id) из нашей БД по chatId
+        const recipientId = await getClientIdByConversation(chatId)
+
+        if (!recipientId) {
+            return NextResponse.json(
+                {
+                    error:
+                        'No client id for this chat (webhook not received yet or not saved)'
+                },
+                { status: 400 }
+            )
+        }
+
+        // 2) По-прежнему берём доп.инфу о чате из inbox
         const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
             headers: {
-                'Cookie': allCookies,
+                Cookie: allCookies,
                 'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
+                Accept: 'application/json'
             }
         })
 
@@ -72,31 +89,22 @@ export async function POST(
         const dealId = talk.entity.id
         const contactId = talk.contact_id
         const crmDialogId = talk.id
-        const accountId = 32967126
-        const amojoId = process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
 
-        // Извлекаем recipient_id из URL аватара
-        const recipientId = getClientIdByChat(chatId)
-        if (!recipientId) {
-            return NextResponse.json(
-                { error: 'No client id for this chat (webhook not received yet)' },
-                { status: 400 }
-            )
-        }
-
+        // 3) Отправляем сообщение в Amojo, используя recipientId из БД
         const amojoUrl = `https://amojo.amocrm.ru/v1/chats/${amojoId}/${chatId}/messages?with_video=true&stand=v16`
 
         const body = {
             silent: false,
-            priority: "low",
+            priority: 'low',
             crm_entity: {
                 id: dealId,
                 type: 2
             },
             persona_name: user.name || 'Менеджер',
-            persona_avatar: "https://images.amocrm.ru/frontend/images/interface/avatars/1.jpeg",
+            persona_avatar:
+                'https://images.amocrm.ru/frontend/images/interface/avatars/1.jpeg',
             text: text.trim(),
-            recipient_id: recipientId,  // UUID из URL аватара
+            recipient_id: recipientId,
             group_id: null,
             crm_dialog_id: crmDialogId,
             crm_contact_id: contactId,
@@ -110,13 +118,14 @@ export async function POST(
         const response = await fetch(amojoUrl, {
             method: 'POST',
             headers: {
-                'accept': 'application/json, text/javascript, */*; q=0.01',
+                accept: 'application/json, text/javascript, */*; q=0.01',
                 'accept-language': 'ru,en;q=0.9',
                 'cache-control': 'no-cache',
                 'content-type': 'application/json',
-                'pragma': 'no-cache',
+                pragma: 'no-cache',
                 'x-auth-token': authToken,
-                'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "YaBrowser";v="26.3", "Yowser";v="2.5"',
+                'sec-ch-ua':
+                    '"Not(A:Brand";v="8", "Chromium";v="144", "YaBrowser";v="26.3", "Yowser";v="2.5"',
                 'sec-ch-ua-mobile': '?0',
                 'sec-ch-ua-platform': '"Windows"',
                 'sec-fetch-dest': 'empty',
@@ -142,27 +151,33 @@ export async function POST(
             )
         }
 
-        let data
+        let data: any
         try {
             data = JSON.parse(responseText)
         } catch {
             data = { raw: responseText }
         }
 
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/chats/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId,
-                message: {
-                    id: data.id || `msg_${Date.now()}`,
-                    text: text.trim(),
-                    created_at: Math.floor(Date.now() / 1000),
-                    author_name: user.name || 'Вы',
-                    is_client: false
-                }
-            })
-        })
+        // Обновляем локальный стор сообщений
+        await fetch(
+            `${
+                process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+            }/api/chats/messages`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chatId,
+                    message: {
+                        id: data.id || `msg_${Date.now()}`,
+                        text: text.trim(),
+                        created_at: Math.floor(Date.now() / 1000),
+                        author_name: user.name || 'Вы',
+                        is_client: false
+                    }
+                })
+            }
+        )
 
         return NextResponse.json({
             success: true,
@@ -175,12 +190,10 @@ export async function POST(
                 author_id: user.id
             }
         })
-
-    } catch (error: any) {
+    } catch (error) {
         console.error('[SEND] Error:', error)
-        return NextResponse.json(
-            { error: error.message },
-            { status: 500 }
-        )
+        const message =
+            error instanceof Error ? error.message : 'Internal server error'
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }
