@@ -6,6 +6,10 @@ import type { DealWithContacts } from "@/lib/types/types"
 
 type Period = "all" | "year" | "month" | "day"
 
+// тот же offset, что и в getUserStats
+const MSK_OFFSET_HOURS = 3
+const MSK_OFFSET_MS = MSK_OFFSET_HOURS * 60 * 60 * 1000
+
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -51,12 +55,14 @@ export async function GET(
             `[User Deals] Loaded ${deals.length} deals for user ${userId}, period=${period}, date=${dateParam}`,
         )
 
-        const now = new Date()
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-        const startOfYear = new Date(now.getFullYear(), 0, 1)
+        // month/year считаем по МСК, чтобы совпадало с getUserStats
+        const nowUtc = new Date()
+        const nowMsk = new Date(nowUtc.getTime() + MSK_OFFSET_MS)
+        const startOfMonthMsk = new Date(nowMsk.getFullYear(), nowMsk.getMonth(), 1)
+        const startOfYearMsk = new Date(nowMsk.getFullYear(), 0, 1)
 
-        let startOfDay: Date | null = null
-        let endOfDay: Date | null = null
+        let startOfDayUtc: Date | null = null
+        let endOfDayUtc: Date | null = null
 
         if (period === "day" && dateParam) {
             const [y, m, d] = dateParam.split("-")
@@ -64,25 +70,31 @@ export async function GET(
             const month = Number(m) - 1
             const day = Number(d)
 
-            startOfDay = new Date(year, month, day, 0, 0, 0, 0)
-            endOfDay = new Date(year, month, day, 23, 59, 59, 999)
+            // день по МСК
+            const mskStart = new Date(year, month, day, 0, 0, 0, 0)
+            const mskEnd = new Date(year, month, day, 23, 59, 59, 999)
+
+            // переводим границы в UTC, потому что created_at — Unix UTC
+            startOfDayUtc = new Date(mskStart.getTime() - MSK_OFFSET_MS)
+            endOfDayUtc = new Date(mskEnd.getTime() - MSK_OFFSET_MS)
         }
 
         const filteredDeals: DealWithContacts[] = deals.filter((deal) => {
-            const createdAt = new Date(deal.created_at * 1000)
+            const createdAtUtc = new Date(deal.created_at * 1000)
+            const createdAtMsk = new Date(createdAtUtc.getTime() + MSK_OFFSET_MS)
 
             if (period === "all") return true
 
             if (period === "year") {
-                return createdAt >= startOfYear
+                return createdAtMsk >= startOfYearMsk
             }
 
             if (period === "month") {
-                return createdAt >= startOfMonth
+                return createdAtMsk >= startOfMonthMsk
             }
 
-            if (period === "day" && startOfDay && endOfDay) {
-                return createdAt >= startOfDay && createdAt <= endOfDay
+            if (period === "day" && startOfDayUtc && endOfDayUtc) {
+                return createdAtUtc >= startOfDayUtc && createdAtUtc <= endOfDayUtc
             }
 
             return true
