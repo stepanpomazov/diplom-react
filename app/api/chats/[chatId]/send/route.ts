@@ -1,12 +1,11 @@
 // app/api/chats/[chatId]/send/route.ts
-import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import {getClientIdByConversation} from "@/lib/chatDB";
+import { getClientIdByConversation } from '@/lib/chatDB'
 
 export async function POST(
-    request: NextRequest,
-    { params }: { params: Promise<{ chatId: string }> } // оставляем, как требует твой RouteHandlerConfig
+    request: Request,
+    { params }: { params: Promise<{ chatId: string }> }
 ) {
     try {
         const { chatId } = await params
@@ -33,19 +32,20 @@ export async function POST(
         const allCookies = cookieStore.toString()
 
         const authToken = process.env.AMOCRM_X_AUTH_TOKEN
+
+        if (!authToken) {
+            return NextResponse.json(
+                { error: 'Missing auth token' },
+                { status: 500 }
+            )
+        }
+
         const subdomain = process.env.AMOCRM_SUBDOMAIN
         const amojoId =
             process.env.AMOCRM_AMOJO_ID || '02a3e344-9bc0-4b0c-95a0-aa2f7d747314'
         const accountId = 32967126
 
-        if (!authToken || !subdomain) {
-            return NextResponse.json(
-                { error: 'Missing AmoCRM configuration' },
-                { status: 500 }
-            )
-        }
-
-        // 1) Ищем чат в inbox — как раньше
+        // 1. Получаем информацию о чате из inbox
         const inboxUrl = `https://${subdomain}.amocrm.ru/ajax/v4/inbox/list?limit=100&order[sort_by]=last_message_at&order[sort_type]=desc`
 
         const inboxResponse = await fetch(inboxUrl, {
@@ -78,28 +78,34 @@ export async function POST(
         const contactId = talk.contact_id
         const crmDialogId = talk.id
 
-        // 2) СТАРЫЙ СПОСОБ: recipient_id из URL аватарки
+        // 2. Сначала пробуем старый способ: recipient_id из URL аватара
         let recipientId: string | null = null
 
-        const avatarUrl: string | undefined = talk.contact?.profile_avatar
-
-        if (avatarUrl) {
-            const match = avatarUrl.match(/\/profiles\/([a-f0-9-]+)\//i)
+        if (talk.contact?.profile_avatar) {
+            const match = talk.contact.profile_avatar.match(
+                /\/profiles\/([a-f0-9-]+)\//i
+            )
             if (match) {
                 recipientId = match[1]
             }
         }
 
-        // 3) Fallback: если из аватарки не достали, пробуем из БД
+        console.log('[SEND] recipientId from avatar:', recipientId)
+
+        // 3. Fallback: если из аватарки не получилось, берём client_id из Neon
         if (!recipientId) {
-            recipientId = await getClientIdByConversation(chatId)
+            const dbClientId = await getClientIdByConversation(chatId)
+            console.log('[SEND] recipientId from DB:', dbClientId)
+            if (dbClientId) {
+                recipientId = dbClientId
+            }
         }
 
         if (!recipientId) {
             return NextResponse.json(
                 {
                     error:
-                        'Recipient ID not found (no UUID in avatar and no client_id from webhook)'
+                        'Recipient ID not found (no Amojo UUID in avatar and no client_id from webhook)'
                 },
                 { status: 404 }
             )
