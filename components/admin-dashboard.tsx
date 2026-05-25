@@ -33,7 +33,6 @@ export function AdminDashboard() {
     const [employeeSearch, setEmployeeSearch] = useState("")
     const [selectedDate, setSelectedDate] = useState<string>("")
 
-    // Когда переключаем период — сбрасываем selectedDate, если это не day
     useEffect(() => {
         if (period !== "day") {
             setSelectedDate("")
@@ -68,7 +67,6 @@ export function AdminDashboard() {
             }
         }
 
-        // если выбран день, но дата ещё не задана — не фетчим
         if (period === "day" && !selectedDate) {
             setData(null)
             setError(null)
@@ -179,14 +177,18 @@ export function AdminDashboard() {
     const totalDeals = currentData?.totalDeals ?? 0
     const totalAmount = currentData?.totalAmount ?? 0
     const avgDealSize = totalDeals > 0 ? Math.round(totalAmount / totalDeals) : 0
+
+    const periodSuccessCount = currentData?.successMonth ?? 0
+    const periodFailCount = currentData?.failMonth ?? 0
+    const periodDealsCount = periodSuccessCount + periodFailCount
+
     const newClientsShare =
-        currentData && currentData.successMonth > 0
-            ? Math.round((currentData.newClientsMonth / currentData.successMonth) * 100)
+        periodSuccessCount > 0
+            ? Math.round(((currentData?.newClientsMonth ?? 0) / periodSuccessCount) * 100)
             : 0
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
-            {/* Заголовок */}
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                     {selectedEmployeeId && (
@@ -208,7 +210,6 @@ export function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Фильтр по периоду + дата */}
             <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     {(["all", "year", "month", "day"] as const).map((p) => (
@@ -245,12 +246,11 @@ export function AdminDashboard() {
 
                 {!selectedEmployeeId && (
                     <span className="text-xs text-gray-500">
-            Нажми на строку в таблице, чтобы открыть статистику сотрудника
-          </span>
+                        Нажми на строку в таблице, чтобы открыть статистику сотрудника
+                    </span>
                 )}
             </div>
 
-            {/* Если выбран day, но даты нет — просто текст вместо метрик */}
             {period === "day" && !selectedDate && (
                 <div className="mb-8 text-center text-gray-500">
                     Выберите дату, чтобы увидеть статистику за конкретный день
@@ -259,7 +259,6 @@ export function AdminDashboard() {
 
             {currentData && !(!selectedDate && period === "day") && (
                 <>
-                    {/* Кнопки сотрудников */}
                     {!selectedEmployeeId && (
                         <div className="mb-8 flex flex-wrap gap-2">
                             <Button
@@ -284,7 +283,6 @@ export function AdminDashboard() {
                         </div>
                     )}
 
-                    {/* Основные метрики */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <MetricCard
                             title="Всего сделок"
@@ -299,28 +297,43 @@ export function AdminDashboard() {
                             icon={<TrendingUp className="h-5 w-5" />}
                             subtitle={`${Math.round(
                                 (currentData.successTotal /
-                                    (currentData.successTotal + currentData.failTotal || 1)) *
+                                    ((currentData.successTotal + currentData.failTotal) || 1)) *
                                 100,
                             )}% конверсия`}
                             color="green"
                         />
                         <MetricCard
-                            title="Продажи за месяц"
-                            value={currentData.successMonth + currentData.failMonth}
+                            title={period === "day" ? "Продажи за день" : period === "month" ? "Продажи за месяц" : period === "year" ? "Продажи за год" : "Продажи"}
+                            value={periodDealsCount}
                             icon={<Calendar className="h-5 w-5" />}
-                            subtitle={`${currentData.successMonth} успешных`}
+                            subtitle={
+                                period === "day"
+                                    ? `${periodSuccessCount} успешных за выбранный день`
+                                    : period === "month"
+                                        ? `${periodSuccessCount} успешных за месяц`
+                                        : period === "year"
+                                            ? `${periodSuccessCount} успешных за год`
+                                            : `${periodSuccessCount} успешных`
+                            }
                             color="purple"
                         />
                         <MetricCard
-                            title="Новых клиентов"
+                            title={period === "day" ? "Новых клиентов за день" : period === "month" ? "Новых клиентов за месяц" : period === "year" ? "Новых клиентов за год" : "Новых клиентов"}
                             value={currentData.newClientsMonth}
                             icon={<UserCircle className="h-5 w-5" />}
-                            subtitle={`План: ${currentData.targetClientsMonth}`}
+                            subtitle={
+                                period === "day"
+                                    ? `План на день: ${currentData.targetClientsMonth}`
+                                    : period === "month"
+                                        ? `План на месяц: ${currentData.targetClientsMonth}`
+                                        : period === "year"
+                                            ? `План на год: ${currentData.targetClientsMonth}`
+                                            : `План: ${currentData.targetClientsMonth}`
+                            }
                             color="orange"
                         />
                     </div>
 
-                    {/* Доп. метрики */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         <MetricCard
                             title="Средний чек"
@@ -333,15 +346,22 @@ export function AdminDashboard() {
                             title="Новые клиенты в сделках"
                             value={`${newClientsShare}%`}
                             icon={<UserCircle className="h-5 w-5" />}
-                            subtitle="Доля новых клиентов от успешных за месяц"
+                            subtitle={
+                                period === "day"
+                                    ? "Доля новых клиентов от успешных за день"
+                                    : period === "month"
+                                        ? "Доля новых клиентов от успешных за месяц"
+                                        : period === "year"
+                                            ? "Доля новых клиентов от успешных за год"
+                                            : "Доля новых клиентов от успешных"
+                            }
                             color="green"
                         />
                     </div>
 
-                    {/* Донаты */}
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
                         <DonutChart
-                            title="Продажи за все время"
+                            title={period === "day" ? "Продажи за день" : period === "month" ? "Продажи за месяц" : period === "year" ? "Продажи за год" : "Продажи за всё время"}
                             value1={currentData.successTotal}
                             value2={currentData.failTotal}
                             label1="Успешные"
@@ -350,7 +370,7 @@ export function AdminDashboard() {
                             color2="#ef4444"
                         />
                         <DonutChart
-                            title="Продажи за месяц"
+                            title={period === "day" ? "Продажи за день" : period === "month" ? "Продажи за месяц" : period === "year" ? "Продажи за год" : "Продажи за всё время"}
                             value1={currentData.successMonth}
                             value2={currentData.failMonth}
                             label1="Успешные"
@@ -359,7 +379,7 @@ export function AdminDashboard() {
                             color2="#f59e0b"
                         />
                         <DonutChart
-                            title="Новые клиенты"
+                            title={period === "day" ? "Новые клиенты за день" : period === "month" ? "Новые клиенты за месяц" : period === "year" ? "Новые клиенты за год" : "Новые клиенты"}
                             value1={currentData.newClientsMonth}
                             value2={Math.max(
                                 0,
@@ -374,7 +394,6 @@ export function AdminDashboard() {
                 </>
             )}
 
-            {/* Сделки сотрудника */}
             {selectedEmployeeId && (
                 <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
@@ -383,8 +402,8 @@ export function AdminDashboard() {
                             Сделки сотрудника
                         </h2>
                         <span className="text-sm text-gray-500">
-              Всего: {employeeDeals.length} сделок
-            </span>
+                            Всего: {employeeDeals.length} сделок
+                        </span>
                     </div>
 
                     {dealsLoading ? (
@@ -422,7 +441,7 @@ export function AdminDashboard() {
                                             onClick={() => openChat(deal)}
                                             className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
                                         >
-                                            <div className="flex justify между items-start">
+                                            <div className="flex justify-between items-start">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <h3 className="font-medium text-gray-900">
@@ -431,8 +450,8 @@ export function AdminDashboard() {
                                                         <span
                                                             className={`text-xs px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}
                                                         >
-                              {status.text}
-                            </span>
+                                                            {status.text}
+                                                        </span>
                                                     </div>
                                                     <p className="text-sm text-gray-500 flex items-center gap-1">
                                                         <User className="h-3 w-3" />
@@ -464,7 +483,6 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* Таблица всех сотрудников */}
             {!selectedEmployeeId && data && (
                 <div className="mt-8">
                     <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
@@ -502,7 +520,7 @@ export function AdminDashboard() {
                                     Конверсия
                                 </th>
                                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
-                                    За месяц
+                                    За период
                                 </th>
                                 <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
                                     Новые клиенты
@@ -541,17 +559,17 @@ export function AdminDashboard() {
                                             {emp.successTotal}
                                         </td>
                                         <td className="px-6 py-4">
-                        <span
-                            className={`text-sm font-medium ${
-                                conversion >= 50
-                                    ? "text-green-600"
-                                    : conversion >= 30
-                                        ? "text-yellow-600"
-                                        : "text-red-600"
-                            }`}
-                        >
-                          {conversion}%
-                        </span>
+                                                <span
+                                                    className={`text-sm font-medium ${
+                                                        conversion >= 50
+                                                            ? "text-green-600"
+                                                            : conversion >= 30
+                                                                ? "text-yellow-600"
+                                                                : "text-red-600"
+                                                    }`}
+                                                >
+                                                    {conversion}%
+                                                </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900">
                                             {emp.successMonth}
@@ -601,10 +619,7 @@ function MetricCard(props: {
     color?: "blue" | "green" | "purple" | "orange"
 }) {
     const { title, value, icon, subtitle, color } = props
-    const colors: Record<
-        NonNullable<typeof color>,
-        string
-    > = {
+    const colors: Record<NonNullable<typeof color>, string> = {
         blue: "bg-blue-50 text-blue-600",
         green: "bg-green-50 text-green-600",
         purple: "bg-purple-50 text-purple-600",
@@ -617,9 +632,7 @@ function MetricCard(props: {
                 <div>
                     <p className="text-sm text-gray-600 mb-1">{title}</p>
                     <p className="text-2xl font-bold text-gray-900">{value}</p>
-                    {subtitle && (
-                        <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-                    )}
+                    {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
                 </div>
                 {icon && (
                     <div
