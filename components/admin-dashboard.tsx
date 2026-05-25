@@ -68,7 +68,7 @@ export function AdminDashboard() {
             }
         }
 
-        // если выбран день, но дата ещё не задана — ничего не фетчим, показываем плейсхолдер
+        // если выбран день, но дата ещё не задана — не фетчим
         if (period === "day" && !selectedDate) {
             setData(null)
             setError(null)
@@ -138,17 +138,6 @@ export function AdminDashboard() {
         setEmployeeDeals([])
     }
 
-    // Плейсхолдер для day без выбранной даты
-    if (period === "day" && !selectedDate) {
-        return (
-            <div className="flex h-64 items-center justify-center">
-                <div className="text-center">
-                    <p className="text-gray-600">Выберите дату для просмотра статистики за день</p>
-                </div>
-            </div>
-        )
-    }
-
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -158,11 +147,11 @@ export function AdminDashboard() {
         )
     }
 
-    if (error || !data) {
+    if (error) {
         return (
             <div className="flex h-64 items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-500">{error || "Нет данных"}</p>
+                    <p className="text-red-500">{error}</p>
                     <Button onClick={() => window.location.reload()} className="mt-4">
                         Повторить
                     </Button>
@@ -171,14 +160,15 @@ export function AdminDashboard() {
         )
     }
 
-    const selectedEmployee = selectedEmployeeId
+    const selectedEmployee = data && selectedEmployeeId
         ? data.employees.find((e) => e.employeeId === selectedEmployeeId)
         : null
 
-    const currentData = selectedEmployee ?? data.aggregated
+    const currentData = data ? (selectedEmployee ?? data.aggregated) : null
     const currentEmployeeName = selectedEmployee ? selectedEmployee.employeeName : "Все сотрудники"
 
     const filteredEmployees = (() => {
+        if (!data) return []
         const q = employeeSearch.trim().toLowerCase()
         if (!q) return data.employees
         return data.employees.filter((emp) =>
@@ -186,16 +176,17 @@ export function AdminDashboard() {
         )
     })()
 
-    const totalDeals = currentData.totalDeals ?? 0
-    const totalAmount = currentData.totalAmount ?? 0
+    const totalDeals = currentData?.totalDeals ?? 0
+    const totalAmount = currentData?.totalAmount ?? 0
     const avgDealSize = totalDeals > 0 ? Math.round(totalAmount / totalDeals) : 0
     const newClientsShare =
-        currentData.successMonth > 0
+        currentData && currentData.successMonth > 0
             ? Math.round((currentData.newClientsMonth / currentData.successMonth) * 100)
             : 0
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
+            {/* Заголовок */}
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                     {selectedEmployeeId && (
@@ -217,6 +208,7 @@ export function AdminDashboard() {
                 </div>
             </div>
 
+            {/* Фильтр по периоду + дата */}
             <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     {(["all", "year", "month", "day"] as const).map((p) => (
@@ -253,120 +245,136 @@ export function AdminDashboard() {
 
                 {!selectedEmployeeId && (
                     <span className="text-xs text-gray-500">
-                        Нажми на строку в таблице, чтобы открыть статистику сотрудника
-                    </span>
+            Нажми на строку в таблице, чтобы открыть статистику сотрудника
+          </span>
                 )}
             </div>
 
-            {!selectedEmployeeId && (
-                <div className="mb-8 flex flex-wrap gap-2">
-                    <Button
-                        variant={selectedEmployeeId === null ? "default" : "outline"}
-                        onClick={() => setSelectedEmployeeId(null)}
-                        className="gap-2"
-                    >
-                        <Users className="h-4 w-4" />
-                        Все сотрудники
-                    </Button>
-                    {data.employees.map((employee) => (
-                        <Button
-                            key={employee.employeeId}
-                            variant={selectedEmployeeId === employee.employeeId ? "default" : "outline"}
-                            onClick={() => setSelectedEmployeeId(employee.employeeId)}
-                            className="gap-2"
-                        >
-                            <User className="h-4 w-4" />
-                            {employee.employeeName.split(" ")[0]}
-                        </Button>
-                    ))}
+            {/* Если выбран day, но даты нет — просто текст вместо метрик */}
+            {period === "day" && !selectedDate && (
+                <div className="mb-8 text-center text-gray-500">
+                    Выберите дату, чтобы увидеть статистику за конкретный день
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <MetricCard
-                    title="Всего сделок"
-                    value={currentData.totalDeals}
-                    icon={<Handshake className="h-5 w-5" />}
-                    subtitle={`На сумму ${(currentData.totalAmount / 1000).toFixed(1)}K ₽`}
-                    color="blue"
-                />
-                <MetricCard
-                    title="Успешные сделки"
-                    value={currentData.successTotal}
-                    icon={<TrendingUp className="h-5 w-5" />}
-                    subtitle={`${Math.round(
-                        (currentData.successTotal /
-                            (currentData.successTotal + currentData.failTotal || 1)) *
-                        100,
-                    )}% конверсия`}
-                    color="green"
-                />
-                <MetricCard
-                    title="Продажи за месяц"
-                    value={currentData.successMonth + currentData.failMonth}
-                    icon={<Calendar className="h-5 w-5" />}
-                    subtitle={`${currentData.successMonth} успешных`}
-                    color="purple"
-                />
-                <MetricCard
-                    title="Новых клиентов"
-                    value={currentData.newClientsMonth}
-                    icon={<UserCircle className="h-5 w-5" />}
-                    subtitle={`План: ${currentData.targetClientsMonth}`}
-                    color="orange"
-                />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <MetricCard
-                    title="Средний чек"
-                    value={formatPrice(avgDealSize)}
-                    icon={<TrendingUp className="h-5 w-5" />}
-                    subtitle="Средняя сумма сделки"
-                    color="blue"
-                />
-                <MetricCard
-                    title="Новые клиенты в сделках"
-                    value={`${newClientsShare}%`}
-                    icon={<UserCircle className="h-5 w-5" />}
-                    subtitle="Доля новых клиентов от успешных за месяц"
-                    color="green"
-                />
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-                <DonutChart
-                    title="Продажи за все время"
-                    value1={currentData.successTotal}
-                    value2={currentData.failTotal}
-                    label1="Успешные"
-                    label2="Неуспешные"
-                    color1="#22c55e"
-                    color2="#ef4444"
-                />
-                <DonutChart
-                    title="Продажи за месяц"
-                    value1={currentData.successMonth}
-                    value2={currentData.failMonth}
-                    label1="Успешные"
-                    label2="Неуспешные"
-                    color1="#3b82f6"
-                    color2="#f59e0b"
-                />
-                <DonutChart
-                    title="Новые клиенты"
-                    value1={currentData.newClientsMonth}
-                    value2={Math.max(
-                        0,
-                        currentData.targetClientsMonth - currentData.newClientsMonth,
+            {currentData && !(!selectedDate && period === "day") && (
+                <>
+                    {/* Кнопки сотрудников */}
+                    {!selectedEmployeeId && (
+                        <div className="mb-8 flex flex-wrap gap-2">
+                            <Button
+                                variant={selectedEmployeeId === null ? "default" : "outline"}
+                                onClick={() => setSelectedEmployeeId(null)}
+                                className="gap-2"
+                            >
+                                <Users className="h-4 w-4" />
+                                Все сотрудники
+                            </Button>
+                            {data?.employees.map((employee) => (
+                                <Button
+                                    key={employee.employeeId}
+                                    variant={selectedEmployeeId === employee.employeeId ? "default" : "outline"}
+                                    onClick={() => setSelectedEmployeeId(employee.employeeId)}
+                                    className="gap-2"
+                                >
+                                    <User className="h-4 w-4" />
+                                    {employee.employeeName.split(" ")[0]}
+                                </Button>
+                            ))}
+                        </div>
                     )}
-                    label1="Привлечено"
-                    label2="До плана"
-                    color1="#8b5cf6"
-                    color2="#374151"
-                />
-            </div>
 
+                    {/* Основные метрики */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <MetricCard
+                            title="Всего сделок"
+                            value={currentData.totalDeals}
+                            icon={<Handshake className="h-5 w-5" />}
+                            subtitle={`На сумму ${(currentData.totalAmount / 1000).toFixed(1)}K ₽`}
+                            color="blue"
+                        />
+                        <MetricCard
+                            title="Успешные сделки"
+                            value={currentData.successTotal}
+                            icon={<TrendingUp className="h-5 w-5" />}
+                            subtitle={`${Math.round(
+                                (currentData.successTotal /
+                                    (currentData.successTotal + currentData.failTotal || 1)) *
+                                100,
+                            )}% конверсия`}
+                            color="green"
+                        />
+                        <MetricCard
+                            title="Продажи за месяц"
+                            value={currentData.successMonth + currentData.failMonth}
+                            icon={<Calendar className="h-5 w-5" />}
+                            subtitle={`${currentData.successMonth} успешных`}
+                            color="purple"
+                        />
+                        <MetricCard
+                            title="Новых клиентов"
+                            value={currentData.newClientsMonth}
+                            icon={<UserCircle className="h-5 w-5" />}
+                            subtitle={`План: ${currentData.targetClientsMonth}`}
+                            color="orange"
+                        />
+                    </div>
+
+                    {/* Доп. метрики */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <MetricCard
+                            title="Средний чек"
+                            value={formatPrice(avgDealSize)}
+                            icon={<TrendingUp className="h-5 w-5" />}
+                            subtitle="Средняя сумма сделки"
+                            color="blue"
+                        />
+                        <MetricCard
+                            title="Новые клиенты в сделках"
+                            value={`${newClientsShare}%`}
+                            icon={<UserCircle className="h-5 w-5" />}
+                            subtitle="Доля новых клиентов от успешных за месяц"
+                            color="green"
+                        />
+                    </div>
+
+                    {/* Донаты */}
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
+                        <DonutChart
+                            title="Продажи за все время"
+                            value1={currentData.successTotal}
+                            value2={currentData.failTotal}
+                            label1="Успешные"
+                            label2="Неуспешные"
+                            color1="#22c55e"
+                            color2="#ef4444"
+                        />
+                        <DonutChart
+                            title="Продажи за месяц"
+                            value1={currentData.successMonth}
+                            value2={currentData.failMonth}
+                            label1="Успешные"
+                            label2="Неуспешные"
+                            color1="#3b82f6"
+                            color2="#f59e0b"
+                        />
+                        <DonutChart
+                            title="Новые клиенты"
+                            value1={currentData.newClientsMonth}
+                            value2={Math.max(
+                                0,
+                                currentData.targetClientsMonth - currentData.newClientsMonth,
+                            )}
+                            label1="Привлечено"
+                            label2="До плана"
+                            color1="#8b5cf6"
+                            color2="#374151"
+                        />
+                    </div>
+                </>
+            )}
+
+            {/* Сделки сотрудника */}
             {selectedEmployeeId && (
                 <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
@@ -375,8 +383,8 @@ export function AdminDashboard() {
                             Сделки сотрудника
                         </h2>
                         <span className="text-sm text-gray-500">
-                            Всего: {employeeDeals.length} сделок
-                        </span>
+              Всего: {employeeDeals.length} сделок
+            </span>
                     </div>
 
                     {dealsLoading ? (
@@ -414,7 +422,7 @@ export function AdminDashboard() {
                                             onClick={() => openChat(deal)}
                                             className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
                                         >
-                                            <div className="flex justify-between items-start">
+                                            <div className="flex justify между items-start">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <h3 className="font-medium text-gray-900">
@@ -423,8 +431,8 @@ export function AdminDashboard() {
                                                         <span
                                                             className={`text-xs px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}
                                                         >
-                                                            {status.text}
-                                                        </span>
+                              {status.text}
+                            </span>
                                                     </div>
                                                     <p className="text-sm text-gray-500 flex items-center gap-1">
                                                         <User className="h-3 w-3" />
@@ -456,7 +464,8 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {!selectedEmployeeId && (
+            {/* Таблица всех сотрудников */}
+            {!selectedEmployeeId && data && (
                 <div className="mt-8">
                     <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                         <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -532,17 +541,17 @@ export function AdminDashboard() {
                                             {emp.successTotal}
                                         </td>
                                         <td className="px-6 py-4">
-                                                <span
-                                                    className={`text-sm font-medium ${
-                                                        conversion >= 50
-                                                            ? "text-green-600"
-                                                            : conversion >= 30
-                                                                ? "text-yellow-600"
-                                                                : "text-red-600"
-                                                    }`}
-                                                >
-                                                    {conversion}%
-                                                </span>
+                        <span
+                            className={`text-sm font-medium ${
+                                conversion >= 50
+                                    ? "text-green-600"
+                                    : conversion >= 30
+                                        ? "text-yellow-600"
+                                        : "text-red-600"
+                            }`}
+                        >
+                          {conversion}%
+                        </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900">
                                             {emp.successMonth}
