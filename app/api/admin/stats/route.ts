@@ -1,10 +1,11 @@
 // app/api/admin/stats/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { AmoCrmService } from "@/lib/amocrm-service"
+import { AmoCrmService, UserStats } from "@/lib/amocrm-service"
 import { Employee } from "@/lib/types/types"
 
-type Period = "all" | "year" | "month"
+// ВАЖНО: этот тип Period должен совпадать с тем, что в AmoCrmService
+type Period = "all" | "year" | "month" | "day"
 
 interface EmployeeStats {
     employeeId: number
@@ -13,9 +14,9 @@ interface EmployeeStats {
     totalAmount: number
     successTotal: number
     failTotal: number
-    successMonth: number
-    failMonth: number
-    newClientsMonth: number
+    successMonth: number      // для period=day сюда кладём дневные значения
+    failMonth: number         // пока 0, если не считаешь
+    newClientsMonth: number   // для period=day тоже дневные
     targetClientsMonth: number
 }
 
@@ -35,8 +36,18 @@ export async function GET(req: NextRequest) {
         }
 
         const { searchParams } = new URL(req.url)
+
         const periodParam = searchParams.get("period") as Period | null
-        const period: Period = periodParam ?? "all"
+        const period: Period =
+            periodParam === "year" ||
+            periodParam === "month" ||
+            periodParam === "day" ||
+            periodParam === "all"
+                ? periodParam
+                : "all"
+
+        const dateParam = searchParams.get("date") ?? undefined
+
         const employeeIdParam = searchParams.get("employeeId")
         const employeeIdFilter = employeeIdParam ? Number(employeeIdParam) : null
 
@@ -51,7 +62,15 @@ export async function GET(req: NextRequest) {
                     return null
                 }
 
-                const stats = await amoCrm.getUserStats(employee.id, { period })
+                const stats = await amoCrm.getUserStats(employee.id, {
+                    period,
+                    // date имеет смысл только для day
+                    date: period === "day" ? dateParam : undefined,
+                })
+
+                // Для period=day используем дневные значения как "month"
+                const periodDeals =
+                    period === "day" ? (stats as UserStats).dayDeals ?? 0 : stats.monthDeals
 
                 const emp: EmployeeStats = {
                     employeeId: employee.id,
@@ -60,9 +79,9 @@ export async function GET(req: NextRequest) {
                     totalAmount: stats.totalAmount,
                     successTotal: stats.wonDeals,
                     failTotal: stats.lostDeals,
-                    successMonth: stats.monthDeals,
+                    successMonth: periodDeals,
                     failMonth: 0,
-                    newClientsMonth: stats.monthDeals,
+                    newClientsMonth: periodDeals,
                     targetClientsMonth: 20,
                 }
 
