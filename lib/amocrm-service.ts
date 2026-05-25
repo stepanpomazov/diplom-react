@@ -1,5 +1,3 @@
-// lib/amocrm-service.ts
-
 import {
     AmoCrmAccount,
     AmoCrmDeal,
@@ -15,7 +13,23 @@ type Period = "all" | "year" | "month" | "day"
 
 interface UserStatsOptions {
     period?: Period
-    date?: string // 'YYYY-MM-DD' для day
+    date?: string
+}
+
+export interface UserStats {
+    totalDeals: number
+    totalAmount: number
+    wonDeals: number
+    lostDeals: number
+    inProgress: number
+    monthDeals: number
+    monthAmount: number
+    yearDeals: number
+    yearAmount: number
+    dayDeals: number
+    dayAmount: number
+    avgDealAmount: number
+    conversion: number
 }
 
 export class AmoCrmService {
@@ -24,10 +38,10 @@ export class AmoCrmService {
 
     constructor() {
         this.accessToken = process.env.AMOCRM_ACCESS_TOKEN!
-        this.subdomain = process.env.AMOCRM_SUBDOMAIN || 'pomazovsp'
+        this.subdomain = process.env.AMOCRM_SUBDOMAIN || "pomazovsp"
 
         if (!this.accessToken) {
-            throw new Error('AMOCRM_ACCESS_TOKEN is not set')
+            throw new Error("AMOCRM_ACCESS_TOKEN is not set")
         }
     }
 
@@ -35,9 +49,9 @@ export class AmoCrmService {
         console.log(`[AmoCRM] Requesting: ${endpoint}`)
         const response = await fetch(`https://${this.subdomain}.amocrm.ru/api/v4${endpoint}`, {
             headers: {
-                'Authorization': `Bearer ${this.accessToken}`,
-                'Content-Type': 'application/json'
-            }
+                Authorization: `Bearer ${this.accessToken}`,
+                "Content-Type": "application/json",
+            },
         })
 
         if (!response.ok) {
@@ -46,14 +60,13 @@ export class AmoCrmService {
             throw new Error(`AmoCRM API error: ${response.status} - ${error.detail || response.statusText}`)
         }
 
-        const data = await response.json() as T
+        const data = (await response.json()) as T
 
-        // Безопасное логирование с проверкой структуры через приведение типа
         const dataWithEmbedded = data as WithEmbedded<T>
         const logData: LogData = {
             status: response.status,
             hasData: !!dataWithEmbedded._embedded,
-            count: dataWithEmbedded._embedded?.leads?.length || 0
+            count: dataWithEmbedded._embedded?.leads?.length || 0,
         }
         console.log(`[AmoCRM] Response for ${endpoint}:`, logData)
 
@@ -61,120 +74,95 @@ export class AmoCrmService {
     }
 
     async getTalks(): Promise<{ _embedded?: { talks?: unknown[] } }> {
-        return this.request('/api/v4/talks')
+        return this.request("/api/v4/talks")
     }
 
     async getUserAmojoId(userId: number): Promise<string | null> {
         try {
-            console.log('[AmoCRM] Getting amojo_id for user:', userId);
-
-            // Запрашиваем пользователя с amojo_id с правильной типизацией
-            const data = await this.request<AmoCrmUserWithAmojoId>(`/users/${userId}?with=amojo_id`);
-
-            console.log('[AmoCRM] User amojo_id:', data.amojo_id);
-            return data.amojo_id || null;
-
+            console.log("[AmoCRM] Getting amojo_id for user:", userId)
+            const data = await this.request<AmoCrmUserWithAmojoId>(`/users/${userId}?with=amojo_id`)
+            console.log("[AmoCRM] User amojo_id:", data.amojo_id)
+            return data.amojo_id || null
         } catch (error) {
-            console.error('Error getting user amojo_id:', error);
-            return null;
+            console.error("Error getting user amojo_id:", error)
+            return null
         }
     }
 
     async getAccount(): Promise<{ id: number; name: string; subdomain: string; current_user_id: number; amojo_id?: string }> {
         return await this.request<{
-            id: number;
-            name: string;
-            subdomain: string;
-            current_user_id: number;
+            id: number
+            name: string
+            subdomain: string
+            current_user_id: number
             amojo_id?: string
-        }>('/account?with=amojo_id')
+        }>("/account?with=amojo_id")
     }
 
     async getCurrentUserAmojoId(userId: number): Promise<string | null> {
-        return this.getUserAmojoId(userId);
+        return this.getUserAmojoId(userId)
     }
 
-    // ПОЛУЧАЕМ РЕАЛЬНОГО ПОЛЬЗОВАТЕЛЯ
     async getCurrentUser(): Promise<AmoCrmUser | null> {
         try {
-            // Сначала получаем информацию об аккаунте
-            const accountData = await this.request<AmoCrmAccount>('/account')
-            console.log('[AmoCRM] Account data:', accountData)
-
-            // ID текущего пользователя должен быть в accountData.current_user_id
+            const accountData = await this.request<AmoCrmAccount>("/account")
             const currentUserId = accountData.current_user_id
 
             if (currentUserId) {
-                // Получаем детальную информацию о пользователе
                 const userData = await this.request<AmoCrmUser>(`/users/${currentUserId}`)
-                console.log('[AmoCRM] User data:', userData)
-
                 return {
                     id: userData.id,
                     name: userData.name,
                     email: userData.email,
-                    rights: userData.rights
+                    rights: userData.rights,
                 }
             }
 
             return null
         } catch (error) {
-            console.error('Error getting current user:', error)
+            console.error("Error getting current user:", error)
             return null
         }
     }
 
-    // ПОЛУЧАЕМ ВСЕ СДЕЛКИ АККАУНТА (для отладки)
     async getAllDeals(): Promise<AmoCrmDeal[]> {
         try {
-            console.log('[AmoCRM] Fetching all deals...')
-            const data = await this.request<ApiResponse<AmoCrmDeal>>('/leads?order[created_at]=desc&limit=50')
-            const deals = data._embedded?.leads || []
-            console.log(`[AmoCRM] Found ${deals.length} deals total`)
-            return deals
+            const data = await this.request<ApiResponse<AmoCrmDeal>>("/leads?order[created_at]=desc&limit=50")
+            return data._embedded?.leads || []
         } catch (error) {
-            console.error('Error getting all deals:', error)
+            console.error("Error getting all deals:", error)
             return []
         }
     }
 
-    // ПОЛУЧАЕМ СПИСОК ПОЛЬЗОВАТЕЛЕЙ (для отладки)
     async getUsers(): Promise<AmoCrmUser[]> {
         try {
-            const data = await this.request<ApiResponse<AmoCrmUser>>('/users')
-            const users = data._embedded?.users || []
-            console.log('[AmoCRM] Users loaded:', users.map(u => ({
-                id: u.id,
-                name: u.name,
-                email: u.email
-            })))
-            return users
+            const data = await this.request<ApiResponse<AmoCrmUser>>("/users")
+            return data._embedded?.users || []
         } catch (error) {
-            console.error('Error getting users:', error)
+            console.error("Error getting users:", error)
             return []
         }
     }
 
-    async getUserStats(userId: number, options?: UserStatsOptions) {
+    async getUserStats(userId: number, options?: UserStatsOptions): Promise<UserStats> {
         const deals = await this.getUserDeals(userId)
 
         const now = new Date()
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
         const startOfYear = new Date(now.getFullYear(), 0, 1)
 
-        // границы дня, если передали date
+        const period: Period = options?.period ?? "all"
+
         let startOfDay: Date | null = null
         let endOfDay: Date | null = null
 
-        const period: Period = options?.period ?? "all"
-
         if (period === "day" && options?.date) {
-            // предполагаем формат YYYY-MM-DD
             startOfDay = new Date(`${options.date}T00:00:00`)
-            endOfDay = new Date(`${options.date}T23:59:59`)
+            endOfDay = new Date(`${options.date}T23:59:59.999`)
         }
 
-        const stats = {
+        const stats: UserStats = {
             totalDeals: 0,
             totalAmount: 0,
             wonDeals: 0,
@@ -250,25 +238,13 @@ export class AmoCrmService {
 
     async getUserDeals(userId: number): Promise<AmoCrmDeal[]> {
         try {
-            console.log(`[AmoCRM] Fetching deals for user ${userId}...`)
-
-            // ВАЖНО: используем правильный параметр фильтрации
-            // responsible_user_id - это поле, по которому фильтруем
             const data = await this.request<ApiResponse<AmoCrmDeal>>(
                 `/leads?filter[responsible_user_id]=${userId}&order[created_at]=desc&limit=50`
             )
 
-            const deals = data._embedded?.leads || []
-            console.log(`[AmoCRM] Found ${deals.length} deals for user ${userId}`)
-
-            // Для отладки покажем первую сделку если есть
-            if (deals.length > 0) {
-                console.log('[AmoCRM] First deal:', deals[0])
-            }
-
-            return deals
+            return data._embedded?.leads || []
         } catch (error) {
-            console.error('Error getting user deals:', error)
+            console.error("Error getting user deals:", error)
             return []
         }
     }
@@ -280,7 +256,7 @@ export class AmoCrmService {
             )
             return data._embedded?.leads || []
         } catch (error) {
-            console.error('Error getting deals with contacts:', error)
+            console.error("Error getting deals with contacts:", error)
             return []
         }
     }

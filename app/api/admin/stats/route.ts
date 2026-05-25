@@ -1,10 +1,8 @@
-// app/api/admin/stats/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { AmoCrmService, UserStats } from "@/lib/amocrm-service"
+import { AmoCrmService } from "@/lib/amocrm-service"
 import { Employee } from "@/lib/types/types"
 
-// ВАЖНО: этот тип Period должен совпадать с тем, что в AmoCrmService
 type Period = "all" | "year" | "month" | "day"
 
 interface EmployeeStats {
@@ -14,9 +12,9 @@ interface EmployeeStats {
     totalAmount: number
     successTotal: number
     failTotal: number
-    successMonth: number      // для period=day сюда кладём дневные значения
-    failMonth: number         // пока 0, если не считаешь
-    newClientsMonth: number   // для period=day тоже дневные
+    successMonth: number
+    failMonth: number
+    newClientsMonth: number
     targetClientsMonth: number
 }
 
@@ -39,10 +37,10 @@ export async function GET(req: NextRequest) {
 
         const periodParam = searchParams.get("period") as Period | null
         const period: Period =
+            periodParam === "all" ||
             periodParam === "year" ||
             periodParam === "month" ||
-            periodParam === "day" ||
-            periodParam === "all"
+            periodParam === "day"
                 ? periodParam
                 : "all"
 
@@ -52,9 +50,7 @@ export async function GET(req: NextRequest) {
         const employeeIdFilter = employeeIdParam ? Number(employeeIdParam) : null
 
         const amoCrm = new AmoCrmService()
-
         const allUsers = await amoCrm.getUsers()
-        console.log("[ADMIN API] Found users:", allUsers.length)
 
         const employeesStatsRaw = await Promise.all(
             allUsers.map(async (employee: Employee) => {
@@ -64,13 +60,10 @@ export async function GET(req: NextRequest) {
 
                 const stats = await amoCrm.getUserStats(employee.id, {
                     period,
-                    // date имеет смысл только для day
                     date: period === "day" ? dateParam : undefined,
                 })
 
-                // Для period=day используем дневные значения как "month"
-                const periodDeals =
-                    period === "day" ? (stats as UserStats).dayDeals ?? 0 : stats.monthDeals
+                const periodDeals = period === "day" ? stats.dayDeals : stats.monthDeals
 
                 const emp: EmployeeStats = {
                     employeeId: employee.id,
@@ -127,9 +120,6 @@ export async function GET(req: NextRequest) {
         })
     } catch (error) {
         console.error("[ADMIN API] Error:", error)
-        return NextResponse.json(
-            { error: "Failed to load admin stats" },
-            { status: 500 },
-        )
+        return NextResponse.json({ error: "Failed to load admin stats" }, { status: 500 })
     }
 }
