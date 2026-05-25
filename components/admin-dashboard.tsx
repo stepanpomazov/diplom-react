@@ -4,9 +4,21 @@
 import { useState, useEffect } from "react"
 import { DonutChart } from "@/components/donut-chart"
 import { Button } from "@/components/ui/button"
-import { Users, User, Loader2, Calendar, Handshake, TrendingUp, UserCircle, Building2, ChevronLeft } from "lucide-react"
+import {
+    Users,
+    User,
+    Loader2,
+    Calendar,
+    Handshake,
+    TrendingUp,
+    UserCircle,
+    Building2,
+    ChevronLeft,
+} from "lucide-react"
 import { ChatModal } from "@/components/chat-modal"
-import {DashboardData, Deal} from "@/lib/types/types";
+import type { DashboardData, Deal } from "@/lib/types/types"
+
+type Period = "all" | "year" | "month"
 
 export function AdminDashboard() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
@@ -18,12 +30,14 @@ export function AdminDashboard() {
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
     const [isChatOpen, setIsChatOpen] = useState(false)
 
-    const [period] = useState<"all" | "year" | "month">("all") // ← НОВОЕ
+    const [period, setPeriod] = useState<Period>("all")
+    const [employeeSearch, setEmployeeSearch] = useState("")
 
     useEffect(() => {
         const fetchAllStats = async () => {
             try {
                 setLoading(true)
+                setError(null)
 
                 const params = new URLSearchParams()
                 if (period !== "all") params.set("period", period)
@@ -31,7 +45,6 @@ export function AdminDashboard() {
                 const response = await fetch(`/api/admin/stats?${params.toString()}`, {
                     credentials: "include",
                 })
-
                 const json = await response.json()
 
                 if (!response.ok) {
@@ -50,7 +63,6 @@ export function AdminDashboard() {
         fetchAllStats()
     }, [period])
 
-    // Загрузка сделок выбранного сотрудника (через user stats API)
     useEffect(() => {
         const fetchEmployeeDeals = async () => {
             if (!selectedEmployeeId) {
@@ -60,18 +72,19 @@ export function AdminDashboard() {
 
             setDealsLoading(true)
             try {
-                // Используем тот же API, что и для сотрудника, но с параметром userId
                 const response = await fetch(`/api/user/${selectedEmployeeId}/deals`, {
-                    credentials: 'include'
+                    credentials: "include",
                 })
                 const json = await response.json()
                 if (response.ok) {
-                    setEmployeeDeals(json.deals || [])
+                    setEmployeeDeals(json.deals ?? json ?? [])
                 } else {
-                    console.error('Failed to fetch employee deals:', json.error)
+                    console.error("Failed to fetch employee deals:", json.error)
+                    setEmployeeDeals([])
                 }
             } catch (error) {
-                console.error('Error fetching employee deals:', error)
+                console.error("Error fetching employee deals:", error)
+                setEmployeeDeals([])
             } finally {
                 setDealsLoading(false)
             }
@@ -81,25 +94,22 @@ export function AdminDashboard() {
     }, [selectedEmployeeId])
 
     const formatPrice = (price: number) => {
-        if (price === 0) return '0 ₽'
-        if (price >= 1000000) {
-            return `${(price / 1000000).toFixed(1)}M ₽`
-        }
-        if (price >= 1000) {
-            return `${(price / 1000).toFixed(1)}K ₽`
-        }
+        if (!price) return "0 ₽"
+        if (price >= 1_000_000) return `${(price / 1_000_000).toFixed(1)}M ₽`
+        if (price >= 1_000) return `${(price / 1_000).toFixed(1)}K ₽`
         return `${price} ₽`
     }
 
     const getStatusText = (statusId: number) => {
-        if (statusId === 142) return { text: 'Успешно', color: 'text-green-600', bg: 'bg-green-50' }
-        if (statusId === 143) return { text: 'Проиграно', color: 'text-red-600', bg: 'bg-red-50' }
-        if (statusId === 84493078 || statusId === 84493214) return { text: 'Неразобранное', color: 'text-gray-500', bg: 'bg-gray-50' }
-        if (statusId === 84493082) return { text: 'Первичный контакт', color: 'text-yellow-600', bg: 'bg-yellow-50' }
-        if (statusId === 84493086) return { text: 'Переговоры', color: 'text-blue-600', bg: 'bg-blue-50' }
-        if (statusId === 84493090) return { text: 'Принимают решение', color: 'text-purple-600', bg: 'bg-purple-50' }
-        if (statusId === 84493094) return { text: 'Согласование', color: 'text-orange-600', bg: 'bg-orange-50' }
-        return { text: 'В работе', color: 'text-gray-600', bg: 'bg-gray-50' }
+        if (statusId === 142) return { text: "Успешно", color: "text-green-600", bg: "bg-green-50" }
+        if (statusId === 143) return { text: "Проиграно", color: "text-red-600", bg: "bg-red-50" }
+        if (statusId === 84493078 || statusId === 84493214)
+            return { text: "Неразобранное", color: "text-gray-500", bg: "bg-gray-50" }
+        if (statusId === 84493082) return { text: "Первичный контакт", color: "text-yellow-600", bg: "bg-yellow-50" }
+        if (statusId === 84493086) return { text: "Переговоры", color: "text-blue-600", bg: "bg-blue-50" }
+        if (statusId === 84493090) return { text: "Принимают решение", color: "text-purple-600", bg: "bg-purple-50" }
+        if (statusId === 84493094) return { text: "Согласование", color: "text-orange-600", bg: "bg-orange-50" }
+        return { text: "В работе", color: "text-gray-600", bg: "bg-gray-50" }
     }
 
     const openChat = (deal: Deal) => {
@@ -125,11 +135,8 @@ export function AdminDashboard() {
         return (
             <div className="flex h-64 items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-500">{error || 'Нет данных'}</p>
-                    <Button
-                        onClick={() => window.location.reload()}
-                        className="mt-4"
-                    >
+                    <p className="text-red-500">{error || "Нет данных"}</p>
+                    <Button onClick={() => window.location.reload()} className="mt-4">
                         Повторить
                     </Button>
                 </div>
@@ -137,13 +144,20 @@ export function AdminDashboard() {
         )
     }
 
-    const currentData = selectedEmployeeId
-        ? data.employees.find(e => e.employeeId === selectedEmployeeId)!
-        : data.aggregated
+    const selectedEmployee = selectedEmployeeId
+        ? data.employees.find((e) => e.employeeId === selectedEmployeeId)
+        : null
 
-    const currentEmployeeName = selectedEmployeeId
-        ? data.employees.find(e => e.employeeId === selectedEmployeeId)?.employeeName
-        : 'Все сотрудники'
+    const currentData = selectedEmployee ?? data.aggregated
+    const currentEmployeeName = selectedEmployee ? selectedEmployee.employeeName : "Все сотрудники"
+
+    const filteredEmployees = (() => {
+        const q = employeeSearch.trim().toLowerCase()
+        if (!q) return data.employees
+        return data.employees.filter((emp) =>
+            emp.employeeName.toLowerCase().includes(q),
+        )
+    })()
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -151,19 +165,14 @@ export function AdminDashboard() {
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                     {selectedEmployeeId && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleBack}
-                            className="gap-1"
-                        >
+                        <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1">
                             <ChevronLeft className="h-4 w-4" />
                             Назад
                         </Button>
                     )}
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">
-                            {selectedEmployeeId ? currentEmployeeName : 'Общая статистика'}
+                            {selectedEmployeeId ? currentEmployeeName : "Общая статистика"}
                         </h1>
                         <p className="text-gray-600 mt-1">
                             {selectedEmployeeId
@@ -172,6 +181,27 @@ export function AdminDashboard() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            {/* Фильтр по периоду */}
+            <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
+                <div className="flex gap-2">
+                    {(["all", "year", "month"] as const).map((p) => (
+                        <Button
+                            key={p}
+                            variant={period === p ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPeriod(p)}
+                        >
+                            {p === "all" ? "Всё время" : p === "year" ? "Этот год" : "Этот месяц"}
+                        </Button>
+                    ))}
+                </div>
+                {!selectedEmployeeId && (
+                    <span className="text-xs text-gray-500">
+            Нажми на строку в таблице, чтобы открыть статистику сотрудника
+          </span>
+                )}
             </div>
 
             {/* Кнопки выбора сотрудника (только в общем режиме) */}
@@ -193,7 +223,7 @@ export function AdminDashboard() {
                             className="gap-2"
                         >
                             <User className="h-4 w-4" />
-                            {employee.employeeName.split(' ')[0]}
+                            {employee.employeeName.split(" ")[0]}
                         </Button>
                     ))}
                 </div>
@@ -212,7 +242,11 @@ export function AdminDashboard() {
                     title="Успешные сделки"
                     value={currentData.successTotal}
                     icon={<TrendingUp className="h-5 w-5" />}
-                    subtitle={`${Math.round((currentData.successTotal / (currentData.successTotal + currentData.failTotal || 1)) * 100)}% конверсия`}
+                    subtitle={`${Math.round(
+                        (currentData.successTotal /
+                            (currentData.successTotal + currentData.failTotal || 1)) *
+                        100,
+                    )}% конверсия`}
                     color="green"
                 />
                 <MetricCard
@@ -254,7 +288,10 @@ export function AdminDashboard() {
                 <DonutChart
                     title="Новые клиенты"
                     value1={currentData.newClientsMonth}
-                    value2={Math.max(0, currentData.targetClientsMonth - currentData.newClientsMonth)}
+                    value2={Math.max(
+                        0,
+                        currentData.targetClientsMonth - currentData.newClientsMonth,
+                    )}
                     label1="Привлечено"
                     label2="До плана"
                     color1="#8b5cf6"
@@ -262,7 +299,7 @@ export function AdminDashboard() {
                 />
             </div>
 
-            {/* Список сделок сотрудника (при выборе конкретного) */}
+            {/* Список сделок сотрудника */}
             {selectedEmployeeId && (
                 <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
@@ -271,8 +308,8 @@ export function AdminDashboard() {
                             Сделки сотрудника
                         </h2>
                         <span className="text-sm text-gray-500">
-                            Всего: {employeeDeals.length} сделок
-                        </span>
+              Всего: {employeeDeals.length} сделок
+            </span>
                     </div>
 
                     {dealsLoading ? (
@@ -283,18 +320,26 @@ export function AdminDashboard() {
                         <div className="bg-white rounded-xl shadow-sm border p-12 text-center text-gray-500">
                             <Handshake className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                             <p>Нет активных сделок у этого сотрудника</p>
-                            <p className="text-sm mt-1">Сделки появятся здесь после начала общения с клиентами</p>
+                            <p className="text-sm mt-1">
+                                Сделки появятся здесь после начала общения с клиентами
+                            </p>
                         </div>
                     ) : (
                         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                             <div className="divide-y">
                                 {employeeDeals.map((deal) => {
-                                    const mainContact = deal._embedded?.contacts?.find(c => c.is_main) || deal._embedded?.contacts?.[0]
+                                    const mainContact =
+                                        deal._embedded?.contacts?.find((c) => c.is_main) ??
+                                        deal._embedded?.contacts?.[0]
                                     const mainCompany = deal._embedded?.companies?.[0]
                                     const status = getStatusText(deal.status_id)
 
-                                    const contactDisplay = mainContact ? `Клиент ${mainContact.id}` : 'Нет контакта'
-                                    const companyDisplay = mainCompany ? `Компания ${mainCompany.id}` : ''
+                                    const contactDisplay = mainContact
+                                        ? `Клиент ${mainContact.id}`
+                                        : "Нет контакта"
+                                    const companyDisplay = mainCompany
+                                        ? `Компания ${mainCompany.id}`
+                                        : ""
 
                                     return (
                                         <div
@@ -305,10 +350,14 @@ export function AdminDashboard() {
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <h3 className="font-medium text-gray-900">{deal.name}</h3>
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
-                                                            {status.text}
-                                                        </span>
+                                                        <h3 className="font-medium text-gray-900">
+                                                            {deal.name}
+                                                        </h3>
+                                                        <span
+                                                            className={`text-xs px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}
+                                                        >
+                              {status.text}
+                            </span>
                                                     </div>
                                                     <p className="text-sm text-gray-500 flex items-center gap-1">
                                                         <User className="h-3 w-3" />
@@ -321,7 +370,10 @@ export function AdminDashboard() {
                                                         )}
                                                     </p>
                                                     <p className="text-xs text-gray-400 mt-1">
-                                                        ID: {deal.id} • Создано: {new Date(deal.created_at * 1000).toLocaleDateString('ru-RU')}
+                                                        ID: {deal.id} • Создано:{" "}
+                                                        {new Date(
+                                                            deal.created_at * 1000,
+                                                        ).toLocaleDateString("ru-RU")}
                                                     </p>
                                                 </div>
                                                 <div className="text-right ml-4">
@@ -339,31 +391,62 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* Таблица всех сотрудников (показываем только в общем режиме) */}
+            {/* Таблица всех сотрудников */}
             {!selectedEmployeeId && (
                 <div className="mt-8">
-                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        Все сотрудники
-                    </h2>
+                    <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+                        <h2 className="text-lg font-semibold flex items-center gap-2">
+                            <Users className="h-5 w-5" />
+                            Все сотрудники
+                        </h2>
+
+                        <input
+                            type="text"
+                            placeholder="Фильтр по имени..."
+                            value={employeeSearch}
+                            onChange={(e) => setEmployeeSearch(e.target.value)}
+                            className="border rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                        />
+                    </div>
+
                     <div className="overflow-hidden rounded-xl border border-gray-200">
                         <table className="w-full">
                             <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Сотрудник</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Всего сделок</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Сумма</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Успешных</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Конверсия</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">За месяц</th>
-                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Новые клиенты</th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Сотрудник
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Всего сделок
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Сумма
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Успешных
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Конверсия
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    За месяц
+                                </th>
+                                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
+                                    Новые клиенты
+                                </th>
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
-                            {data.employees.map((emp) => {
-                                const conversion = emp.successTotal + emp.failTotal > 0
-                                    ? Math.round((emp.successTotal / (emp.successTotal + emp.failTotal)) * 100)
-                                    : 0
+                            {filteredEmployees.map((emp) => {
+                                const conversion =
+                                    emp.successTotal + emp.failTotal > 0
+                                        ? Math.round(
+                                            (emp.successTotal /
+                                                (emp.successTotal + emp.failTotal)) *
+                                            100,
+                                        )
+                                        : 0
+
                                 return (
                                     <tr
                                         key={emp.employeeId}
@@ -371,18 +454,38 @@ export function AdminDashboard() {
                                         className="cursor-pointer hover:bg-gray-50 transition-colors"
                                     >
                                         <td className="px-6 py-4">
-                                            <p className="text-sm font-medium text-gray-900">{emp.employeeName}</p>
+                                            <p className="text-sm font-medium text-gray-900">
+                                                {emp.employeeName}
+                                            </p>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">{emp.totalDeals}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">{formatPrice(emp.totalAmount)}</td>
-                                        <td className="px-6 py-4 text-sm text-green-600 font-medium">{emp.successTotal}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-900">
+                                            {emp.totalDeals}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-900">
+                                            {formatPrice(emp.totalAmount)}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-green-600 font-medium">
+                                            {emp.successTotal}
+                                        </td>
                                         <td className="px-6 py-4">
-                                                <span className={`text-sm font-medium ${conversion >= 50 ? 'text-green-600' : conversion >= 30 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                                    {conversion}%
-                                                </span>
+                        <span
+                            className={`text-sm font-medium ${
+                                conversion >= 50
+                                    ? "text-green-600"
+                                    : conversion >= 30
+                                        ? "text-yellow-600"
+                                        : "text-red-600"
+                            }`}
+                        >
+                          {conversion}%
+                        </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">{emp.successMonth}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">{emp.newClientsMonth}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-900">
+                                            {emp.successMonth}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-900">
+                                            {emp.newClientsMonth}
+                                        </td>
                                     </tr>
                                 )
                             })}
@@ -393,39 +496,46 @@ export function AdminDashboard() {
             )}
 
             <ChatModal
-                deal={selectedDeal ? {
-                    id: selectedDeal.id,
-                    name: selectedDeal.name,
-                    price: selectedDeal.price,
-                    contact_name: selectedDeal._embedded?.contacts?.[0]?.id
-                        ? `Клиент ${selectedDeal._embedded.contacts[0].id}`
-                        : undefined,
-                    company_name: selectedDeal._embedded?.companies?.[0]?.id
-                        ? `Компания ${selectedDeal._embedded.companies[0].id}`
-                        : undefined
-                } : null}
+                deal={
+                    selectedDeal
+                        ? {
+                            id: selectedDeal.id,
+                            name: selectedDeal.name,
+                            price: selectedDeal.price,
+                            contact_name: selectedDeal._embedded?.contacts?.[0]?.id
+                                ? `Клиент ${selectedDeal._embedded.contacts[0].id}`
+                                : undefined,
+                            company_name: selectedDeal._embedded?.companies?.[0]?.id
+                                ? `Компания ${selectedDeal._embedded.companies[0].id}`
+                                : undefined,
+                        }
+                        : null
+                }
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
                 userId={selectedEmployeeId || 0}
-                userName={currentEmployeeName || ''}
+                userName={currentEmployeeName || ""}
             />
         </div>
     )
 }
 
-// Компонент для карточки метрики
-function MetricCard({ title, value, icon, subtitle, color }: {
+function MetricCard(props: {
     title: string
     value: string | number
     icon?: React.ReactNode
     subtitle?: string
-    color?: 'blue' | 'green' | 'purple' | 'orange'
+    color?: "blue" | "green" | "purple" | "orange"
 }) {
-    const colors = {
-        blue: 'bg-blue-50 text-blue-600',
-        green: 'bg-green-50 text-green-600',
-        purple: 'bg-purple-50 text-purple-600',
-        orange: 'bg-orange-50 text-orange-600'
+    const { title, value, icon, subtitle, color } = props
+    const colors: Record<
+        NonNullable<typeof color>,
+        string
+    > = {
+        blue: "bg-blue-50 text-blue-600",
+        green: "bg-green-50 text-green-600",
+        purple: "bg-purple-50 text-purple-600",
+        orange: "bg-orange-50 text-orange-600",
     }
 
     return (
@@ -434,10 +544,16 @@ function MetricCard({ title, value, icon, subtitle, color }: {
                 <div>
                     <p className="text-sm text-gray-600 mb-1">{title}</p>
                     <p className="text-2xl font-bold text-gray-900">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+                    {subtitle && (
+                        <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+                    )}
                 </div>
                 {icon && (
-                    <div className={`p-2 rounded-lg ${color ? colors[color] : 'bg-gray-50 text-gray-600'}`}>
+                    <div
+                        className={`p-2 rounded-lg ${
+                            color ? colors[color] : "bg-gray-50 text-gray-600"
+                        }`}
+                    >
                         {icon}
                     </div>
                 )}
