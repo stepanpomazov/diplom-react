@@ -86,9 +86,16 @@ export function AdminDashboard() {
 
             setDealsLoading(true)
             try {
-                const response = await fetch(`/api/user/${selectedEmployeeId}/deals`, {
-                    credentials: "include",
-                })
+                const params = new URLSearchParams()
+                if (period !== "all") params.set("period", period)
+                if (period === "day" && selectedDate) params.set("date", selectedDate)
+
+                const response = await fetch(
+                    `/api/user/${selectedEmployeeId}/deals?${params.toString()}`,
+                    {
+                        credentials: "include",
+                    },
+                )
                 const json = await response.json()
                 if (response.ok) {
                     setEmployeeDeals(json.deals ?? json ?? [])
@@ -104,8 +111,14 @@ export function AdminDashboard() {
             }
         }
 
+        // если day, но дата не выбрана — не фетчим сделки
+        if (period === "day" && !selectedDate) {
+            setEmployeeDeals([])
+            return
+        }
+
         fetchEmployeeDeals()
-    }, [selectedEmployeeId])
+    }, [selectedEmployeeId, period, selectedDate])
 
     const formatPrice = (price: number) => {
         if (!price) return "0 ₽"
@@ -172,6 +185,48 @@ export function AdminDashboard() {
         return data.employees.filter((emp) =>
             emp.employeeName.toLowerCase().includes(q),
         )
+    })()
+
+    // Фильтрация сделок сотрудника по текущему period/date (на стороне фронта)
+    const filteredEmployeeDeals = (() => {
+        if (!employeeDeals || employeeDeals.length === 0) return []
+
+        if (period === "all") return employeeDeals
+
+        const now = new Date()
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        const startOfYear = new Date(now.getFullYear(), 0, 1)
+
+        if (period === "year") {
+            return employeeDeals.filter((deal) => {
+                const createdAt = new Date(deal.created_at * 1000)
+                return createdAt >= startOfYear
+            })
+        }
+
+        if (period === "month") {
+            return employeeDeals.filter((deal) => {
+                const createdAt = new Date(deal.created_at * 1000)
+                return createdAt >= startOfMonth
+            })
+        }
+
+        if (period === "day" && selectedDate) {
+            const [y, m, d] = selectedDate.split("-")
+            const year = Number(y)
+            const month = Number(m) - 1
+            const day = Number(d)
+
+            const startOfDay = new Date(year, month, day, 0, 0, 0, 0)
+            const endOfDay = new Date(year, month, day, 23, 59, 59, 999)
+
+            return employeeDeals.filter((deal) => {
+                const createdAt = new Date(deal.created_at * 1000)
+                return createdAt >= startOfDay && createdAt <= endOfDay
+            })
+        }
+
+        return employeeDeals
     })()
 
     const totalDeals = currentData?.totalDeals ?? 0
@@ -402,7 +457,7 @@ export function AdminDashboard() {
                             Сделки сотрудника
                         </h2>
                         <span className="text-sm text-gray-500">
-                            Всего: {employeeDeals.length} сделок
+                            Всего: {filteredEmployeeDeals.length} сделок
                         </span>
                     </div>
 
@@ -410,7 +465,7 @@ export function AdminDashboard() {
                         <div className="flex justify-center py-12">
                             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                         </div>
-                    ) : employeeDeals.length === 0 ? (
+                    ) : filteredEmployeeDeals.length === 0 ? (
                         <div className="bg-white rounded-xl shadow-sm border p-12 text-center text-gray-500">
                             <Handshake className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                             <p>Нет активных сделок у этого сотрудника</p>
@@ -421,7 +476,7 @@ export function AdminDashboard() {
                     ) : (
                         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                             <div className="divide-y">
-                                {employeeDeals.map((deal) => {
+                                {filteredEmployeeDeals.map((deal) => {
                                     const mainContact =
                                         deal._embedded?.contacts?.find((c) => c.is_main) ??
                                         deal._embedded?.contacts?.[0]
