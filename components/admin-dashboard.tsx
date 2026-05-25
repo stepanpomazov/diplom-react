@@ -1,4 +1,3 @@
-// components/admin-dashboard.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -18,7 +17,7 @@ import {
 import { ChatModal } from "@/components/chat-modal"
 import type { DashboardData, Deal } from "@/lib/types/types"
 
-type Period = "all" | "year" | "month"
+type Period = "all" | "year" | "month" | "day"
 
 export function AdminDashboard() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null)
@@ -32,6 +31,7 @@ export function AdminDashboard() {
 
     const [period, setPeriod] = useState<Period>("all")
     const [employeeSearch, setEmployeeSearch] = useState("")
+    const [selectedDate, setSelectedDate] = useState<string>("")
 
     useEffect(() => {
         const fetchAllStats = async () => {
@@ -41,6 +41,7 @@ export function AdminDashboard() {
 
                 const params = new URLSearchParams()
                 if (period !== "all") params.set("period", period)
+                if (period === "day" && selectedDate) params.set("date", selectedDate)
 
                 const response = await fetch(`/api/admin/stats?${params.toString()}`, {
                     credentials: "include",
@@ -60,8 +61,14 @@ export function AdminDashboard() {
             }
         }
 
+        if (period === "day" && !selectedDate) {
+            setData(null)
+            setLoading(false)
+            return
+        }
+
         fetchAllStats()
-    }, [period])
+    }, [period, selectedDate])
 
     useEffect(() => {
         const fetchEmployeeDeals = async () => {
@@ -159,9 +166,18 @@ export function AdminDashboard() {
         )
     })()
 
+    // Derived metrics
+    const totalDeals = currentData.totalDeals ?? 0
+    const totalAmount = currentData.totalAmount ?? 0
+    const avgDealSize = totalDeals > 0 ? Math.round(totalAmount / totalDeals) : 0
+    const avgDealDurationDays = (currentData as Date).avgDealDurationDays ?? null
+    const newClientsShare =
+        currentData.successMonth > 0
+            ? Math.round((currentData.newClientsMonth / currentData.successMonth) * 100)
+            : 0
+
     return (
         <div className="p-6 max-w-7xl mx-auto">
-            {/* Заголовок с кнопкой назад */}
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                     {selectedEmployeeId && (
@@ -183,20 +199,35 @@ export function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Фильтр по периоду */}
             <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
-                <div className="flex gap-2">
-                    {(["all", "year", "month"] as const).map((p) => (
+                <div className="flex flex-wrap items-center gap-2">
+                    {(["all", "year", "month", "day"] as const).map((p) => (
                         <Button
                             key={p}
                             variant={period === p ? "default" : "outline"}
                             size="sm"
                             onClick={() => setPeriod(p)}
                         >
-                            {p === "all" ? "Всё время" : p === "year" ? "Этот год" : "Этот месяц"}
+                            {p === "all"
+                                ? "Всё время"
+                                : p === "year"
+                                    ? "Этот год"
+                                    : p === "month"
+                                        ? "Этот месяц"
+                                        : "Конкретный день"}
                         </Button>
                     ))}
+
+                    {period === "day" && (
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="border rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                        />
+                    )}
                 </div>
+
                 {!selectedEmployeeId && (
                     <span className="text-xs text-gray-500">
             Нажми на строку в таблице, чтобы открыть статистику сотрудника
@@ -204,7 +235,6 @@ export function AdminDashboard() {
                 )}
             </div>
 
-            {/* Кнопки выбора сотрудника (только в общем режиме) */}
             {!selectedEmployeeId && (
                 <div className="mb-8 flex flex-wrap gap-2">
                     <Button
@@ -229,8 +259,7 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* Основные метрики */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <MetricCard
                     title="Всего сделок"
                     value={currentData.totalDeals}
@@ -265,7 +294,32 @@ export function AdminDashboard() {
                 />
             </div>
 
-            {/* Графики */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <MetricCard
+                    title="Средний чек"
+                    value={formatPrice(avgDealSize)}
+                    icon={<TrendingUp className="h-5 w-5" />}
+                    subtitle="Средняя сумма сделки"
+                    color="blue"
+                />
+                {avgDealDurationDays !== null && (
+                    <MetricCard
+                        title="Средний цикл сделки"
+                        value={`${avgDealDurationDays.toFixed(1)} дн.`}
+                        icon={<Calendar className="h-5 w-5" />}
+                        subtitle="От создания до завершения"
+                        color="purple"
+                    />
+                )}
+                <MetricCard
+                    title="Новые клиенты в сделках"
+                    value={`${newClientsShare}%`}
+                    icon={<UserCircle className="h-5 w-5" />}
+                    subtitle="Доля новых клиентов от успешных за месяц"
+                    color="green"
+                />
+            </div>
+
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
                 <DonutChart
                     title="Продажи за все время"
@@ -299,7 +353,6 @@ export function AdminDashboard() {
                 />
             </div>
 
-            {/* Список сделок сотрудника */}
             {selectedEmployeeId && (
                 <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
@@ -371,9 +424,7 @@ export function AdminDashboard() {
                                                     </p>
                                                     <p className="text-xs text-gray-400 mt-1">
                                                         ID: {deal.id} • Создано:{" "}
-                                                        {new Date(
-                                                            deal.created_at * 1000,
-                                                        ).toLocaleDateString("ru-RU")}
+                                                        {new Date(deal.created_at * 1000).toLocaleDateString("ru-RU")}
                                                     </p>
                                                 </div>
                                                 <div className="text-right ml-4">
@@ -391,7 +442,6 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* Таблица всех сотрудников */}
             {!selectedEmployeeId && (
                 <div className="mt-8">
                     <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
