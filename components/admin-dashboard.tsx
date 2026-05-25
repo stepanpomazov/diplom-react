@@ -166,11 +166,9 @@ export function AdminDashboard() {
         )
     })()
 
-    // Derived metrics
     const totalDeals = currentData.totalDeals ?? 0
     const totalAmount = currentData.totalAmount ?? 0
     const avgDealSize = totalDeals > 0 ? Math.round(totalAmount / totalDeals) : 0
-    const avgDealDurationDays = (currentData as Date).avgDealDurationDays ?? null
     const newClientsShare =
         currentData.successMonth > 0
             ? Math.round((currentData.newClientsMonth / currentData.successMonth) * 100)
@@ -302,15 +300,6 @@ export function AdminDashboard() {
                     subtitle="Средняя сумма сделки"
                     color="blue"
                 />
-                {avgDealDurationDays !== null && (
-                    <MetricCard
-                        title="Средний цикл сделки"
-                        value={`${avgDealDurationDays.toFixed(1)} дн.`}
-                        icon={<Calendar className="h-5 w-5" />}
-                        subtitle="От создания до завершения"
-                        color="purple"
-                    />
-                )}
                 <MetricCard
                     title="Новые клиенты в сделках"
                     value={`${newClientsShare}%`}
