@@ -33,6 +33,13 @@ export function AdminDashboard() {
     const [employeeSearch, setEmployeeSearch] = useState("")
     const [selectedDate, setSelectedDate] = useState<string>("")
 
+    // Когда переключаем период — сбрасываем selectedDate, если это не day
+    useEffect(() => {
+        if (period !== "day") {
+            setSelectedDate("")
+        }
+    }, [period])
+
     useEffect(() => {
         const fetchAllStats = async () => {
             try {
@@ -61,8 +68,10 @@ export function AdminDashboard() {
             }
         }
 
+        // если выбран день, но дата ещё не задана — ничего не фетчим, показываем плейсхолдер
         if (period === "day" && !selectedDate) {
             setData(null)
+            setError(null)
             setLoading(false)
             return
         }
@@ -127,6 +136,17 @@ export function AdminDashboard() {
     const handleBack = () => {
         setSelectedEmployeeId(null)
         setEmployeeDeals([])
+    }
+
+    // Плейсхолдер для day без выбранной даты
+    if (period === "day" && !selectedDate) {
+        return (
+            <div className="flex h-64 items-center justify-center">
+                <div className="text-center">
+                    <p className="text-gray-600">Выберите дату для просмотра статистики за день</p>
+                </div>
+            </div>
+        )
     }
 
     if (loading) {
@@ -204,7 +224,12 @@ export function AdminDashboard() {
                             key={p}
                             variant={period === p ? "default" : "outline"}
                             size="sm"
-                            onClick={() => setPeriod(p)}
+                            onClick={() => {
+                                setPeriod(p)
+                                if (p !== "day") {
+                                    setSelectedDate("")
+                                }
+                            }}
                         >
                             {p === "all"
                                 ? "Всё время"
@@ -228,8 +253,8 @@ export function AdminDashboard() {
 
                 {!selectedEmployeeId && (
                     <span className="text-xs text-gray-500">
-            Нажми на строку в таблице, чтобы открыть статистику сотрудника
-          </span>
+                        Нажми на строку в таблице, чтобы открыть статистику сотрудника
+                    </span>
                 )}
             </div>
 
@@ -350,8 +375,8 @@ export function AdminDashboard() {
                             Сделки сотрудника
                         </h2>
                         <span className="text-sm text-gray-500">
-              Всего: {employeeDeals.length} сделок
-            </span>
+                            Всего: {employeeDeals.length} сделок
+                        </span>
                     </div>
 
                     {dealsLoading ? (
@@ -398,8 +423,8 @@ export function AdminDashboard() {
                                                         <span
                                                             className={`text-xs px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}
                                                         >
-                              {status.text}
-                            </span>
+                                                            {status.text}
+                                                        </span>
                                                     </div>
                                                     <p className="text-sm text-gray-500 flex items-center gap-1">
                                                         <User className="h-3 w-3" />
@@ -507,17 +532,17 @@ export function AdminDashboard() {
                                             {emp.successTotal}
                                         </td>
                                         <td className="px-6 py-4">
-                        <span
-                            className={`text-sm font-medium ${
-                                conversion >= 50
-                                    ? "text-green-600"
-                                    : conversion >= 30
-                                        ? "text-yellow-600"
-                                        : "text-red-600"
-                            }`}
-                        >
-                          {conversion}%
-                        </span>
+                                                <span
+                                                    className={`text-sm font-medium ${
+                                                        conversion >= 50
+                                                            ? "text-green-600"
+                                                            : conversion >= 30
+                                                                ? "text-yellow-600"
+                                                                : "text-red-600"
+                                                    }`}
+                                                >
+                                                    {conversion}%
+                                                </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900">
                                             {emp.successMonth}
