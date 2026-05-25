@@ -11,10 +11,11 @@ import {
     WithEmbedded
 } from "./types/types"
 
-type Period = "all" | "year" | "month"
+type Period = "all" | "year" | "month" | "day"
 
 interface UserStatsOptions {
     period?: Period
+    date?: string // 'YYYY-MM-DD' для day
 }
 
 export class AmoCrmService {
@@ -161,6 +162,18 @@ export class AmoCrmService {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
         const startOfYear = new Date(now.getFullYear(), 0, 1)
 
+        // границы дня, если передали date
+        let startOfDay: Date | null = null
+        let endOfDay: Date | null = null
+
+        const period: Period = options?.period ?? "all"
+
+        if (period === "day" && options?.date) {
+            // предполагаем формат YYYY-MM-DD
+            startOfDay = new Date(`${options.date}T00:00:00`)
+            endOfDay = new Date(`${options.date}T23:59:59`)
+        }
+
         const stats = {
             totalDeals: 0,
             totalAmount: 0,
@@ -171,11 +184,11 @@ export class AmoCrmService {
             monthAmount: 0,
             yearDeals: 0,
             yearAmount: 0,
+            dayDeals: 0,
+            dayAmount: 0,
             avgDealAmount: 0,
             conversion: 0,
         }
-
-        const period: Period = options?.period ?? "all"
 
         deals.forEach((deal: AmoCrmDeal) => {
             const amount = deal.price || 0
@@ -184,11 +197,16 @@ export class AmoCrmService {
 
             const isInMonth = createdAt >= startOfMonth
             const isInYear = createdAt >= startOfYear
+            const isInDay =
+                startOfDay && endOfDay
+                    ? createdAt >= startOfDay && createdAt <= endOfDay
+                    : false
 
             const includeInTotals =
                 period === "all" ||
                 (period === "year" && isInYear) ||
-                (period === "month" && isInMonth)
+                (period === "month" && isInMonth) ||
+                (period === "day" && isInDay)
 
             if (includeInTotals) {
                 stats.totalDeals++
@@ -211,6 +229,11 @@ export class AmoCrmService {
             if (isInYear) {
                 stats.yearDeals++
                 stats.yearAmount += amount
+            }
+
+            if (isInDay) {
+                stats.dayDeals++
+                stats.dayAmount += amount
             }
         })
 
