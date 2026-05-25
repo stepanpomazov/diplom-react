@@ -158,8 +158,22 @@ export class AmoCrmService {
         let endOfDay: Date | null = null
 
         if (period === "day" && options?.date) {
-            startOfDay = new Date(`${options.date}T00:00:00`)
-            endOfDay = new Date(`${options.date}T23:59:59.999`)
+            // options.date в формате 'YYYY-MM-DD' — это дата по МСК
+            const [yearStr, monthStr, dayStr] = options.date.split("-")
+            const year = Number(yearStr)
+            const month = Number(monthStr) - 1 // JS месяц с 0
+            const day = Number(dayStr)
+
+            const tzOffsetHours = 3 // Москва = UTC+3
+            const tzOffsetMs = tzOffsetHours * 60 * 60 * 1000
+
+            // Начало дня по МСК: 00:00 МСК → 21:00 предыдущего дня по UTC
+            const mskStart = new Date(Date.UTC(year, month, day, 0, 0, 0))
+            const mskEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999))
+
+            // Сдвигаем к UTC, учитывая, что created_at в UTC
+            startOfDay = new Date(mskStart.getTime() - tzOffsetMs)
+            endOfDay = new Date(mskEnd.getTime() - tzOffsetMs)
         }
 
         const stats: UserStats = {
