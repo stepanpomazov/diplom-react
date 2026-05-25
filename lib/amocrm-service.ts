@@ -11,6 +11,12 @@ import {
     WithEmbedded
 } from "./types/types"
 
+type Period = "all" | "year" | "month"
+
+interface UserStatsOptions {
+    period?: Period
+}
+
 export class AmoCrmService {
     private accessToken: string
     private subdomain: string
@@ -148,7 +154,7 @@ export class AmoCrmService {
         }
     }
 
-    async getUserStats(userId: number) {
+    async getUserStats(userId: number, options?: UserStatsOptions) {
         const deals = await this.getUserDeals(userId)
 
         const now = new Date()
@@ -156,7 +162,7 @@ export class AmoCrmService {
         const startOfYear = new Date(now.getFullYear(), 0, 1)
 
         const stats = {
-            totalDeals: deals.length,
+            totalDeals: 0,
             totalAmount: 0,
             wonDeals: 0,
             lostDeals: 0,
@@ -166,42 +172,55 @@ export class AmoCrmService {
             yearDeals: 0,
             yearAmount: 0,
             avgDealAmount: 0,
-            conversion: 0
+            conversion: 0,
         }
+
+        const period: Period = options?.period ?? "all"
 
         deals.forEach((deal: AmoCrmDeal) => {
             const amount = deal.price || 0
             const createdAt = new Date(deal.created_at * 1000)
             const statusId = deal.status_id
 
-            stats.totalAmount += amount
+            const isInMonth = createdAt >= startOfMonth
+            const isInYear = createdAt >= startOfYear
 
-            // Статусы (настройте под свою CRM)
-            // 142 - Успешно реализовано
-            // 143 - Закрыто и не реализовано
-            if (statusId === 142) {
-                stats.wonDeals++
-            } else if (statusId === 143) {
-                stats.lostDeals++
-            } else {
-                stats.inProgress++
+            const includeInTotals =
+                period === "all" ||
+                (period === "year" && isInYear) ||
+                (period === "month" && isInMonth)
+
+            if (includeInTotals) {
+                stats.totalDeals++
+                stats.totalAmount += amount
+
+                if (statusId === 142) {
+                    stats.wonDeals++
+                } else if (statusId === 143) {
+                    stats.lostDeals++
+                } else {
+                    stats.inProgress++
+                }
             }
 
-            if (createdAt > startOfMonth) {
+            if (isInMonth) {
                 stats.monthDeals++
                 stats.monthAmount += amount
             }
 
-            if (createdAt > startOfYear) {
+            if (isInYear) {
                 stats.yearDeals++
                 stats.yearAmount += amount
             }
         })
 
-        stats.avgDealAmount = stats.totalDeals > 0 ? Math.round(stats.totalAmount / stats.totalDeals) : 0
-        stats.conversion = (stats.wonDeals + stats.lostDeals) > 0
-            ? Math.round((stats.wonDeals / (stats.wonDeals + stats.lostDeals)) * 100)
-            : 0
+        stats.avgDealAmount =
+            stats.totalDeals > 0 ? Math.round(stats.totalAmount / stats.totalDeals) : 0
+
+        stats.conversion =
+            stats.wonDeals + stats.lostDeals > 0
+                ? Math.round((stats.wonDeals / (stats.wonDeals + stats.lostDeals)) * 100)
+                : 0
 
         return stats
     }

@@ -18,31 +18,37 @@ export function AdminDashboard() {
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
     const [isChatOpen, setIsChatOpen] = useState(false)
 
+    const [period] = useState<"all" | "year" | "month">("all") // ← НОВОЕ
+
     useEffect(() => {
         const fetchAllStats = async () => {
             try {
                 setLoading(true)
-                const response = await fetch('/api/admin/stats', {
-                    credentials: 'include'
+
+                const params = new URLSearchParams()
+                if (period !== "all") params.set("period", period)
+
+                const response = await fetch(`/api/admin/stats?${params.toString()}`, {
+                    credentials: "include",
                 })
 
                 const json = await response.json()
 
                 if (!response.ok) {
-                    setError(json.error || 'Failed to fetch stats')
+                    setError(json.error || "Failed to fetch stats")
                     return
                 }
 
                 setData(json)
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Ошибка загрузки')
+                setError(err instanceof Error ? err.message : "Ошибка загрузки")
             } finally {
                 setLoading(false)
             }
         }
 
         fetchAllStats()
-    }, [])
+    }, [period])
 
     // Загрузка сделок выбранного сотрудника (через user stats API)
     useEffect(() => {
