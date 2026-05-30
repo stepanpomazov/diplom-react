@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client"
 
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/components/auth-context"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {AdminDashboard} from "@/components/admin-dashboard";

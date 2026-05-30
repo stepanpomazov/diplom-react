@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/components/auth-context"
 import { Button } from "@/components/ui/button"
 import { LogOut, User, ShieldUser, LayoutDashboard, Users } from "lucide-react"
 import {DashboardHeaderProps} from "@/lib/types/types";

@@ -2,7 +2,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth, AuthProvider } from "@/lib/auth-context"
+import { useAuth, AuthProvider } from "@/components/auth-context"
 import { LoginForm } from "@/components/login-form"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { EmployeeDashboard } from "@/components/employee-dashboard"
